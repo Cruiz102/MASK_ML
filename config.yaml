@@ -1,0 +1,34 @@
+Trainer:
+
+
+VIT:
+  embedded_size: 200
+  attention_heads: 200
+  mlp_hidden_size: 2
+  mlp_layers: 2
+  dropout_prop: 0.2
+  transformer_blocks: 5
+  image_size: 224
+  patch_size: 16
+  num_channels: 3
+  encoder_stride: 16
+
+
+
+
+class ViTConfig:
+    def __init__(
+        self,
+        transformer_config: TransformerConfig,
+        transformer_block=10,
+        image_size=224,
+        patch_size=16,
+        num_channels=3,
+        encoder_stride=16
+    ):
+        self.transformer_config = transformer_config
+        self.transformer_block = transformer_block,
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.num_channels= num_channels
+        self.encoder_stride = encoder_stride
