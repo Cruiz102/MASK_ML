@@ -11,7 +11,7 @@ import torch.functional as F
 import numpy as np
 from utils import read_yaml
 from torchvision.transforms.functional import to_tensor
-
+from utils import calculate_conv2d_output_dimensions
 
 class TransformerConfig:
     def __init__(self) -> None:
@@ -31,7 +31,8 @@ class ViTConfig:
         image_size=224,
         patch_size=16,
         num_channels=3,
-        encoder_stride=16
+        encoder_stride=16,
+        positional_embedding: bool = True
     ):
         if config_file_path:
             self.load_config_file(config_file_path)
@@ -42,6 +43,7 @@ class ViTConfig:
         self.patch_size = patch_size
         self.num_channels= num_channels
         self.encoder_stride = encoder_stride
+        self.positional_embedding = positional_embedding
 
     def load_config_file(self, file_path: str):
         config_params = read_yaml(file_path)
@@ -115,15 +117,26 @@ class TransformerBlock(nn.Module):
 class VITPatchEncoder(nn.Module):
     def __init__(self,config: ViTConfig):
         super(VITPatchEncoder, self).__init__()
+        self.config = config
         self.projection = nn.Conv2d(config.num_channels,config.transformer_config.embedded_size, config.patch_size, config.patch_size)
-        # self.positional_embedding = torch.ParameterDict()
+        self.pos_embed: Optional[nn.Parameter] = None
+        height_feature_map, width_feature_map = calculate_conv2d_output_dimensions(self.config.image_size, self.config.image_size, config.encoder_stride, config.patch_size)
+        self.sequence_length  = height_feature_map * width_feature_map
+        if config.positional_embedding:
+            pass
+            # Initialize absolute positional embedding with pretrain image size.
+            self.pos_embed = nn.Parameter(
+                torch.zeros((1, self.sequence_length, self.config.transformer_config.embedded_size ))
+            ) # This should be set up depending on the Hybrid use of the convolutional Layer.
     def forward(self, images: Union[torch.Tensor, np.ndarray, List[Image.Image]]):
-
         if isinstance(images, list):
             images = to_tensor(images)
         elif isinstance(images, np.ndarray):
             images = to_tensor(images)
-        embeddings = self.projection(images) #.flatten(2).transpose(1, 2)
+        
+        embeddings = self.projection(images).flatten(2).transpose(1, 2)
+        if self.config.positional_embedding:
+            embeddings += self.pos_embed
         return embeddings
 
 class VitModel(nn.Module):

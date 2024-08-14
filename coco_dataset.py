@@ -18,11 +18,15 @@ class CocoSegmentationDataset(Dataset):
     def __init__(self, 
                  annotation_dir: str = "/home/cesarruiz/Downloads/panoptic_annotations_trainval2017/instances_val2017.json",
                  img_dir: str = "/home/cesarruiz/Downloads/val2017/",
-                 resize_to: tuple = (256, 256)):
+                 image_size: tuple = (256, 256),
+                 objects_num: int = 1,
+                 ):
+        self.image_size = image_size
         self.coco_tool = COCO(annotation_dir)
         self.img_dir = img_dir
         self.img_ids = self.coco_tool.getImgIds()
-        self.resize = Resize(resize_to)
+        self.resize = Resize(self.image_size)
+        self.objects_num = objects_num
 
     def __len__(self):
         return len(self.img_ids)
@@ -45,12 +49,15 @@ class CocoSegmentationDataset(Dataset):
         # Initialize an empty mask
         mask = torch.zeros((height, width))
         masks = torch.tensor([])
+        target_objects = list(range(self.objects_num))     
+        target_objects = np.random.choice(target_objects, size=self.objects_num, replace=False)
 
-        for ann in anns:
-            if 'segmentation' in ann:
-                if isinstance(ann['segmentation'], list):
+        #FIXME: There is going to be an index access error if the number of annotations is less than self.objects_num
+        for i in target_objects:
+            if 'segmentation' in anns[i]:
+                if isinstance(anns[i]['segmentation'], list):
                     # Polygon format
-                    rle = maskUtils.frPyObjects(ann['segmentation'], height, width)
+                    rle = maskUtils.frPyObjects(anns[i]['segmentation'], height, width)
                     m = maskUtils.decode(rle)
                     m = torch.tensor(m.transpose(2,0,1)[0], dtype=torch.float32).unsqueeze(0)
 
