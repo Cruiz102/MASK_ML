@@ -2,13 +2,13 @@ import torch
 from torch import nn
 from torch import Tensor
 import numpy
+import torch.nn.functional as F
 import cv2
 import requests
 import math
 from typing import Optional, Union, Tuple, List, Literal
 from PIL import Image
 import logging
-import torch.functional as F
 import numpy as np
 from utils import read_yaml
 from torchvision.transforms.functional import to_tensor
@@ -28,18 +28,18 @@ class ViTConfig:
         self,
         config_file_path: Optional[str] = None,
         transformer_config: TransformerConfig = TransformerConfig(),
-        transformer_block=10,
-        image_size=224,
-        patch_size=16,
-        num_channels=3,
-        encoder_stride=16,
+        transformer_blocks: int=10,
+        image_size:int = 256,
+        patch_size:int=16,
+        num_channels:int=3,
+        encoder_stride:int=16,
         positinal_embedding: Literal["sinusoidal", 'rotary', 'learned'] = 'sinusoidal' 
     ):
         if config_file_path:
             self.load_config_file(config_file_path)
 
         self.transformer_config = transformer_config
-        self.transformer_blocks = transformer_block,
+        self.transformer_blocks = transformer_blocks
         self.image_size = image_size
         self.patch_size = patch_size
         self.num_channels= num_channels
@@ -138,22 +138,28 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
 
 class MultiHeadAttention(nn.Module):
     def __init__(self,config: TransformerConfig, rotational_embeddings = False):
-        super(self).__init__()
+        super(MultiHeadAttention,self).__init__()
+        self.config = config
         self.rotational_embeddings = rotational_embeddings
-        self.c_attn = nn.Linear(config.embedded_size, 3 * config.attention_heads, bias=True)
+        self.flash = False
+        self.c_attn = nn.Linear(config.embedded_size, 3 * config.embedded_size, bias=False)
+        self.c_proj = nn.Linear(config.embedded_size,  config.embedded_size, bias=True)
+        self.attn_dropout = nn.Dropout(0.1)
+        self.resid_dropout = nn.Dropout(0.1)
+
 
         if self.rotational_embeddings:
             self.rot_embeddings = RotaryEmbedding(config.embedded_size)
 
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
-    def forward(self, x, position_ids: Tensor):
+    def forward(self, x, position_ids: Optional[Tensor] = None):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.attention_heads, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q, k, v   = self.c_attn(x).split(self.config.embedded_size, dim=2)
+        k = k.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
+        q = q.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
 
 
         # Get the positional relative embeddings with  RoPE:
@@ -169,7 +175,7 @@ class MultiHeadAttention(nn.Module):
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            # att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -178,19 +184,25 @@ class MultiHeadAttention(nn.Module):
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
+    
+
+class MLP(nn.Module):
+    def __init__(self):
+        pass
 
 class TransformerBlock(nn.Module):
     def __init__(self, config: TransformerConfig):
-        super(self).__init__()
-        self.hidden_size = config.hidden_size
+        super(TransformerBlock, self).__init__()
         self.first_norm_layer = nn.LayerNorm(config.embedded_size)
-        self.head_attention = MultiHeadAttention()
+        self.head_attention = MultiHeadAttention(config=config)
         self.norm_layer = nn.LayerNorm(config.embedded_size)
-        self.feed_forward = [nn.Linear(config.embedded_size) for i in range(config.mlp_hidden_size)]
+        self.feed_forward = nn.ModuleList([nn.Linear(config.embedded_size, config.embedded_size) for _ in range(config.mlp_hidden_size)])
 
     def forward(self, x):
-        x = self.head_attention(x)
-        x = self.norm_layer(x)
+        y = self.head_attention(x)
+        y = self.norm_layer(y)
+        y = self.feed_forward(y)
+        return y
 
 
 
@@ -232,17 +244,19 @@ class VITPatchEncoder(nn.Module):
 
 class VitModel(nn.Module):
     def __init__(self, config: ViTConfig):
+        super(VitModel, self).__init__()
         self.config = config
         self.embedded_layer = VITPatchEncoder(config)
-        self.attention_blocks = [TransformerBlock(config.transformer_config) for i in range(self.config.transformer_block)]
+        self.transformer_blocks = nn.ModuleList([TransformerBlock(config.transformer_config) for _ in range(self.config.transformer_blocks)])
     def load_config(self):
         pass
 
-    def forward(self, x: Union[torch.tensor, np.ndarray, List[Image.Image]]):
-        x = self.embedded_layer(x) # Size (Batch, sequence_length, embedded_size)
-        for block in self.attention_blocks:
-            x = block(x)
-        return x
+    def forward(self, x: Union[Tensor, np.ndarray, List[Image.Image]]):
+        y = self.embedded_layer(x) # Size (Batch, sequence_length, embedded_size)
+        for block in self.transformer_blocks:
+            y = block(y)
+            print(y.shape)
+        return y
     
 def train(model):
     steps = 0
@@ -257,3 +271,13 @@ def train(model):
     for i in range(steps):
         
         print(i)
+
+
+if __name__ == "__main__":
+    from coco_dataset import CocoSegmentationDataset
+    dataset  = CocoSegmentationDataset()
+    image,  mask = dataset[0]
+    image = image.unsqueeze(0)
+    config = ViTConfig()
+    model = VitModel(config)
+    print(model(image.float()))
