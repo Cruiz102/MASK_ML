@@ -1,17 +1,18 @@
 import torch
 from torch import nn
+from torch import Tensor
 import numpy
 import cv2
 import requests
 import math
-from typing import Optional, Union, Tuple, List
+from typing import Optional, Union, Tuple, List, Literal
 from PIL import Image
 import logging
 import torch.functional as F
 import numpy as np
 from utils import read_yaml
 from torchvision.transforms.functional import to_tensor
-from utils import calculate_conv2d_output_dimensions
+from utils import calculate_conv2d_output_dimensions, sinusoidal_positional_encoding
 
 class TransformerConfig:
     def __init__(self) -> None:
@@ -32,7 +33,7 @@ class ViTConfig:
         patch_size=16,
         num_channels=3,
         encoder_stride=16,
-        positional_embedding: bool = True
+        positinal_embedding: Literal["sinusoidal", 'rotary', 'learned'] = 'sinusoidal' 
     ):
         if config_file_path:
             self.load_config_file(config_file_path)
@@ -43,7 +44,7 @@ class ViTConfig:
         self.patch_size = patch_size
         self.num_channels= num_channels
         self.encoder_stride = encoder_stride
-        self.positional_embedding = positional_embedding
+        self.positional_embedding = positinal_embedding
 
     def load_config_file(self, file_path: str):
         config_params = read_yaml(file_path)
@@ -60,18 +61,92 @@ class ViTConfig:
 
 
 
+# Copied from transformers.models.llama.modeling_llama.LlamaRotaryEmbedding with Llama->Phi
+class RotaryEmbedding(nn.Module):
+    def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
+        super().__init__()
+
+        self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        # Build here to make `torch.jit.trace` work.
+        self._set_cos_sin_cache(
+            seq_len=max_position_embeddings, device=self.inv_freq.device, dtype=torch.get_default_dtype()
+        )
+
+    def _set_cos_sin_cache(self, seq_len, device, dtype):
+        self.max_seq_len_cached = seq_len
+        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
+
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)
+        # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        emb = torch.cat((freqs, freqs), dim=-1)
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
+
+    def forward(self, x, seq_len=None):
+        # x: [bs, num_attention_heads, seq_len, head_size]
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
+
+        return (
+            self.cos_cached[:seq_len].to(dtype=x.dtype),
+            self.sin_cached[:seq_len].to(dtype=x.dtype),
+        )
+
+
+# Copied from transformers.models.llama.modeling_llama.rotate_half
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+# Copied from transformers.models.llama.modeling_llama.apply_rotary_pos_emb
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
+    """Applies Rotary Position Embedding to the query and key tensors.
+
+    Args:
+        q (`torch.Tensor`): The query tensor.
+        k (`torch.Tensor`): The key tensor.
+        cos (`torch.Tensor`): The cosine part of the rotary embedding.
+        sin (`torch.Tensor`): The sine part of the rotary embedding.
+        position_ids (`torch.Tensor`):
+            The position indices of the tokens corresponding to the query and key tensors. For example, this can be
+            used to pass offsetted position ids when working with a KV-cache.
+        unsqueeze_dim (`int`, *optional*, defaults to 1):
+            The 'unsqueeze_dim' argument specifies the dimension along which to unsqueeze cos[position_ids] and
+            sin[position_ids] so that they can be properly broadcasted to the dimensions of q and k. For example, note
+            that cos[position_ids] and sin[position_ids] have the shape [batch_size, seq_len, head_dim]. Then, if q and
+            k have the shape [batch_size, heads, seq_len, head_dim], then setting unsqueeze_dim=1 makes
+            cos[position_ids] and sin[position_ids] broadcastable to the shapes of q and k. Similarly, if q and k have
+            the shape [batch_size, seq_len, heads, head_dim], then set unsqueeze_dim=2.
+    Returns:
+        `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
+    """
+    cos = cos[position_ids].unsqueeze(unsqueeze_dim)
+    sin = sin[position_ids].unsqueeze(unsqueeze_dim)
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
+
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, heads, all_head_size, embedd_size, bias):
+    def __init__(self,config: TransformerConfig, rotational_embeddings = False):
         super(self).__init__()
-        self.attention_heads = heads
-        self.all_head_size = all_head_size
-        self.c_attn = nn.Linear(embedd_size, 3 * all_head_size, bias=bias)
+        self.rotational_embeddings = rotational_embeddings
+        self.c_attn = nn.Linear(config.embedded_size, 3 * config.attention_heads, bias=True)
 
-    
+        if self.rotational_embeddings:
+            self.rot_embeddings = RotaryEmbedding(config.embedded_size)
+
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
-    def forward(self, x):
+    def forward(self, x, position_ids: Tensor):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -79,6 +154,13 @@ class MultiHeadAttention(nn.Module):
         k = k.view(B, T, self.attention_heads, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+
+
+        # Get the positional relative embeddings with  RoPE:
+        if self.rotational_embeddings:
+            cos, sin = self.rot_embeddings(x)
+            query_rot, key_rot = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, position_ids)
+
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -122,12 +204,21 @@ class VITPatchEncoder(nn.Module):
         self.pos_embed: Optional[nn.Parameter] = None
         height_feature_map, width_feature_map = calculate_conv2d_output_dimensions(self.config.image_size, self.config.image_size, config.encoder_stride, config.patch_size)
         self.sequence_length  = height_feature_map * width_feature_map
-        if config.positional_embedding:
-            pass
+        if config.positional_embedding == "learned":
             # Initialize absolute positional embedding with pretrain image size.
             self.pos_embed = nn.Parameter(
                 torch.zeros((1, self.sequence_length, self.config.transformer_config.embedded_size ))
-            ) # This should be set up depending on the Hybrid use of the convolutional Layer.
+            ) 
+        elif config.positional_embedding == "sinusoidal":
+            self.pos_embed = sinusoidal_positional_encoding(self.sequence_length, self.config.transformer_config.embedded_size)
+
+        
+
+        elif config.positional_embedding == "rotary":
+            # The RoPE embeddings are not applied as a absolute vector to add but as a rotation matrix.
+            # If using the rotation embeddings this will be executed in the attention Layer before doing 
+            # the inner product between the Queries and the Keys.
+            pass
     def forward(self, images: Union[torch.Tensor, np.ndarray, List[Image.Image]]):
         if isinstance(images, list):
             images = to_tensor(images)
