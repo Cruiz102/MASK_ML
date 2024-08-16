@@ -21,6 +21,7 @@ class TransformerConfig:
         self.attention_heads = 5
         self.mlp_hidden_size = 2
         self.mlp_layers = 2
+        self.activation_function = "relu"
         self.dropout_prob = 0.2
 
 class ViTConfig:
@@ -165,7 +166,7 @@ class MultiHeadAttention(nn.Module):
         # Get the positional relative embeddings with  RoPE:
         if self.rotational_embeddings:
             cos, sin = self.rot_embeddings(x)
-            query_rot, key_rot = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, position_ids)
+            query_rot, key_rot = apply_rotary_pos_emb(q, k, cos, sin, position_ids)
 
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
@@ -187,21 +188,53 @@ class MultiHeadAttention(nn.Module):
     
 
 class MLP(nn.Module):
-    def __init__(self):
-        pass
+    def __init__(self, activation_function: str, input_size: int, output_size: int, hidden_sizes: Optional[List[int]] = None):
+        super(MLP, self).__init__()
+        if hidden_sizes:
+            layer_sizes = [input_size] + hidden_sizes + [output_size]
+        else:
+            layer_sizes = [input_size, output_size]
+        
+        # Initialize an empty ModuleList
+        self.layers = nn.ModuleList()
+        
+        # Create layers dynamically and add them to the ModuleList
+        for i in range(len(layer_sizes) - 1):
+            self.layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))
 
+        # Define the activation function based on the string input
+        if activation_function == "gelu":
+            self.activation = nn.GELU()
+        elif activation_function == "leaky_relu":
+            self.activation = nn.LeakyReLU()
+        elif activation_function == "relu":
+            self.activation = nn.ReLU()
+        else:
+            raise ValueError(f"Unsupported activation function: {activation_function}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Pass input through all layers except the last one with activation
+        for layer in self.layers[:-1]: # type: ignore
+            x = self.activation(layer(x))
+        
+        # No activation on the final layer
+        x = self.layers[-1](x)
+        return x
+    
+
+    
 class TransformerBlock(nn.Module):
     def __init__(self, config: TransformerConfig):
         super(TransformerBlock, self).__init__()
-        self.first_norm_layer = nn.LayerNorm(config.embedded_size)
-        self.head_attention = MultiHeadAttention(config=config)
-        self.norm_layer = nn.LayerNorm(config.embedded_size)
-        self.feed_forward = nn.ModuleList([nn.Linear(config.embedded_size, config.embedded_size) for _ in range(config.mlp_hidden_size)])
+        self.attention = MultiHeadAttention(config=config)
+        self.norm_layer_1 = nn.LayerNorm(config.embedded_size)
+        self.norm_layer_2 = nn.LayerNorm(config.embedded_size)
+        hidden_layers = [config.mlp_hidden_size for _ in range(config.mlp_layers) ]
+        self.feed_forward = MLP("relu", config.embedded_size, config.embedded_size,hidden_layers)
 
     def forward(self, x):
-        y = self.head_attention(x)
-        y = self.norm_layer(y)
-        y = self.feed_forward(y)
+        y = x + self.attention(self.norm_layer_1(x))
+        y = y + self.feed_forward(self.norm_layer_2(y))
         return y
 
 
@@ -280,4 +313,4 @@ if __name__ == "__main__":
     image = image.unsqueeze(0)
     config = ViTConfig()
     model = VitModel(config)
-    print(model(image.float()))
+    print(model(image.float()).shape)
