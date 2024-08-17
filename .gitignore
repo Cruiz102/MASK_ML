@@ -3,3 +3,4 @@ files
 *.ipynb
 *__pycache__
 .vscode
+development_log.txt

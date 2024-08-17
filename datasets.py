@@ -12,6 +12,7 @@ from torchvision.transforms.functional import to_tensor
 from utils import PreProcessor
 import torch.functional as F
 from torchvision.transforms import Resize
+import json
 
 
 class CocoSegmentationDataset(Dataset):
@@ -70,6 +71,60 @@ class CocoSegmentationDataset(Dataset):
                         masks = torch.cat((masks, mask), dim=0)
 
         return image, masks
+    
+
+
+class SA1BImageDataset(Dataset):
+    def __init__(self, root_dir, transforms=None):
+        """
+        Args:
+            root_dir (string): Directory with all the images and JSON files.
+            transforms (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.root_dir = root_dir
+        self.transforms = transforms
+        self.image_files = [f for f in os.listdir(root_dir) if f.endswith('.jpg')]
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, idx):
+        img_name = self.image_files[idx]
+        img_path = os.path.join(self.root_dir, img_name)
+        json_path = os.path.join(self.root_dir, img_name.replace('.jpg', '.json'))
+
+        # Load image
+        image = Image.open(img_path).convert("RGB")
+
+        # Load JSON metadata
+        with open(json_path, 'r') as f:
+            metadata = json.load(f)
+
+        # Convert relevant data to tensors
+        bbox = torch.tensor(metadata['bbox'])
+        segmentation = torch.tensor(metadata['segmentation']['counts'])
+        area = torch.tensor(metadata['area'])
+        point_coords = torch.tensor(metadata['point_coords'])
+        crop_box = torch.tensor(metadata['crop_box'])
+        predicted_iou = torch.tensor(metadata['predicted_iou'])
+        stability_score = torch.tensor(metadata['stability_score'])
+
+        sample = {
+            'image': image,
+            'bbox': bbox,
+            'segmentation': segmentation,
+            'area': area,
+            'point_coords': point_coords,
+            'crop_box': crop_box,
+            'predicted_iou': predicted_iou,
+            'stability_score': stability_score
+        }
+
+        if self.transforms:
+            sample['image'] = self.transforms(sample['image'])
+
+        return sample
+
 
 if __name__ == "__main__":
     dataset = CocoSegmentationDataset(img_dir="/home/cesarruiz/Downloads/val2017/", annotation_dir='/home/cesarruiz/Downloads/panoptic_annotations_trainval2017/instances_val2017.json')
