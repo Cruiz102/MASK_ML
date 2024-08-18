@@ -1,7 +1,10 @@
 import torch
+from typing import Tuple
+from torch import Tensor
 import torch.nn as nn
 from transformer import TransformerConfig, TransformerBlock
 from torch.nn import functional as F
+from utils import sinusoidal_positional_encoding
 
 # Lightly adapted from
 # https://github.com/facebookresearch/MaskFormer/blob/main/mask_former/modeling/transformer/transformer_predictor.py # noqa
@@ -47,7 +50,7 @@ class MaskDecoderConfig:
 
 # From https://github.com/facebookresearch/detectron2/blob/main/detectron2/layers/batch_norm.py # noqa
 # Itself from https://github.com/facebookresearch/ConvNeXt/blob/d1fa8f6fef0a165b27399986cc2bdacc92777e40/models/convnext.py#L119  # noqa
-class LayerNorm2d(nn.Module):
+class LayerNorm2d(nn.Module):   
     def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.ones(num_channels))
@@ -66,7 +69,8 @@ class MaskDecoder:
         self.config = config
         self.num_multimask_outputs: int = 3
         activation= nn.GELU()
-
+        self.mask_token = nn.Parameter(torch.zeros(config.transformer_config.embedded_size))
+        self.image_positional_embedding = sinusoidal_positional_encoding(10,self.config.transformer_config.embedded_size)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(config.transformer_config) for _ in range(config.transformer_blocks)])
 
         self.output_upscaling = nn.Sequential(
@@ -86,8 +90,24 @@ class MaskDecoder:
                             config.num_multimask_outputs)
         
 
-    def forward(self, image_embeddings):
-        pass
+    def forward(self, image_embeddings: Tensor) -> Tuple[Tensor, Tensor]:
+
+        batch_size,sequence_length, dimension_size = image_embeddings.shape # (Batch, Sequence Length, Dimension Model)
+        expanded_mask = self.mask_token.expand(batch_size, sequence_length, -1)
+        tokens = torch.cat([image_embeddings, expanded_mask], dim= 0)
+        for transformer_block in self.transformer_blocks:
+            x = transformer_block(tokens)
+
+        iou_token_out = x[:, 0, :]
+        mask_tokens_out = x[:, 1 : (1 + self.config.num_multimask_outputs), :]\
+        src = src.transpose(1, 2).view(b, c, h, w)
+        upscaled_embedding = self.output_upscaling(src)
+
+        iou_pred = self.iou_mlp(iou_token_out)
+        mask_pred = self.masks_mlp(mask_tokens_out)
+
+        return mask_pred, iou_pred
+        
 
 
 

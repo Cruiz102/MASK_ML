@@ -1,0 +1,13 @@
+transformer_config:
+  attention_heads: 8
+  mlp_hidden_size: 512
+  mlp_layers: 2
+  dropout_prob: 0.1
+  embedded_size: 256
+
+transformer_blocks: 10
+image_size: 256
+patch_size: 16
+num_channels: 3
+encoder_stride: 16
+positional_embedding: "sinusoidal"

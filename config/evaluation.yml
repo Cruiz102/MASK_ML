@@ -1,0 +1,23 @@
+defaults:
+  - vit_model: vit_model
+
+evaluation:
+  dataset: coco
+  task: classification
+  
+  batch_size: 8
+
+
+
+datasets:
+  coco_validation:
+    download: False
+    image_directory: /sadf/sad
+    annotation_directory: /adsfa/adsfa
+
+  sa1b_validation:
+  download: False
+  image_directory: "/asdf/asdf"
+  annotation_directory: "adga/adsf"
+
+

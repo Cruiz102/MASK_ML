@@ -153,7 +153,7 @@ class MultiHeadAttention(nn.Module):
             self.rot_embeddings = RotaryEmbedding(config.embedded_size)
 
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
-    def forward(self, x, position_ids: Optional[Tensor] = None):
+    def forward(self, x, position_ids: Optional[Tensor] = None, return_attention_head = False)-> Union[Tensor, Tuple[Tensor, Tensor]]:
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -166,7 +166,7 @@ class MultiHeadAttention(nn.Module):
         # Get the positional relative embeddings with  RoPE:
         if self.rotational_embeddings:
             cos, sin = self.rot_embeddings(x)
-            query_rot, key_rot = apply_rotary_pos_emb(q, k, cos, sin, position_ids)
+            q, k = apply_rotary_pos_emb(q, k, cos, sin, position_ids)
 
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
@@ -184,7 +184,10 @@ class MultiHeadAttention(nn.Module):
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
-        return y
+        if return_attention_head:
+            return y, att
+        else:
+            return y
     
     
 
@@ -197,9 +200,11 @@ class TransformerBlock(nn.Module):
         self.norm_layer_2 = nn.LayerNorm(config.embedded_size)
         hidden_layers = [config.mlp_hidden_size for _ in range(config.mlp_layers) ]
         self.feed_forward = MLP("relu", config.embedded_size, config.embedded_size,hidden_layers)
-
-    def forward(self, x):
-        y = x + self.attention(self.norm_layer_1(x))
+    def forward(self, x: Tensor, return_attention_head = False) -> Union[Tensor,Tuple[Tensor,Tensor]]:
+        y, attention_head = x + self.attention(self.norm_layer_1(x), return_attention_head)
         y = y + self.feed_forward(self.norm_layer_2(y))
-        return y
+        if  return_attention_head:
+            return y, attention_head
+        else:
+            return y
 
