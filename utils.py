@@ -75,8 +75,5 @@ def sinusoidal_positional_encoding(seq_len, d_model, device=None):
     return pe
 
 
-def create_dataloader(dataset_name: str):
-    pass
-
 def get_avaliables_datasets(cfg):
     pass

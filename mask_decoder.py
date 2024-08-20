@@ -91,7 +91,7 @@ class MaskDecoder(nn.Module):
         
 
     def forward(self, image_embeddings: Tensor) -> Tuple[Tensor, Tensor]:
-
+        b, c ,h ,w = image_embeddings.shape
         batch_size,sequence_length, dimension_size = image_embeddings.shape # (Batch, Sequence Length, Dimension Model)
         expanded_mask = self.mask_token.expand(batch_size, sequence_length, -1)
         tokens = torch.cat([image_embeddings, expanded_mask], dim= 0)
@@ -102,6 +102,12 @@ class MaskDecoder(nn.Module):
         mask_tokens_out = x[:, 1 : (1 + self.config.num_multimask_outputs), :]
         src = src.transpose(1, 2).view(b, c, h, w)
         upscaled_embedding = self.output_upscaling(src)
+        b, c, h, w = upscaled_embedding.shape
+
+        masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
+
+        # Generate mask quality predictions
+        iou_pred = self.iou_prediction_head(iou_token_out)
 
         iou_pred = self.iou_mlp(iou_token_out)
         mask_pred = self.masks_mlp(mask_tokens_out)

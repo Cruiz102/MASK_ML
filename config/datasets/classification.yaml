@@ -10,3 +10,16 @@ datasets:
     imagenet_validation:
       image_directory: /val
       annotation_directory: /val
+
+
+  cifar100:
+    download : True
+    base_dir: /asdf/asdf
+    cifar100_train:
+      image_directory: /train
+      annotation_directory: /val
+    cifar100_validation:
+      image_directory: /train
+      annotation_directory: /val
+
+      

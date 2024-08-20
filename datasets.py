@@ -13,6 +13,21 @@ from utils import PreProcessor
 import torch.functional as F
 from torchvision.transforms import Resize
 import json
+from torch.utils.data import DataLoader
+import torchvision
+
+
+def create_dataloader(dataset_name: str, image_dir : str, annotation_dir: str, batch_size: int, shuffle: bool = False) -> DataLoader:
+    if dataset_name == "coco":
+        dataset = CocoSegmentationDataset(annotation_dir, image_dir)
+    elif dataset_name == "sa1b":
+        dataset = SA1BImageDataset(image_dir)
+    elif dataset_name == 'cifar100':
+        dataset = dataset = torchvision.datasets.CIFAR100(image_dir, download=True)
+        
+    dataloader  = DataLoader(dataset,batch_size= batch_size, shuffle = shuffle)
+
+    return dataloader
 
 
 class CocoSegmentationDataset(Dataset):

@@ -11,6 +11,7 @@ from vit import ViTConfig, VitModel
 def run_evaluation(cfg: DictConfig):
     # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
+    print(cfg['dataset'])
 
 
 if __name__ == "__main__":
