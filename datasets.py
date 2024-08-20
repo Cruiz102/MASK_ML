@@ -53,6 +53,8 @@ class CocoSegmentationDataset(Dataset):
         target_objects = list(range(self.objects_num))     
         target_objects = np.random.choice(target_objects, size=self.objects_num, replace=False)
 
+        
+
         #FIXME: There is going to be an index access error if the number of annotations is less than self.objects_num
         for i in target_objects:
             if 'segmentation' in anns[i]:
@@ -69,6 +71,10 @@ class CocoSegmentationDataset(Dataset):
                         masks = mask
                     else:
                         masks = torch.cat((masks, mask), dim=0)
+            if 'bbox' in anns[i]:
+                x, y, w, h = map(int, anns[i]['bbox'])
+                box_data  = torch.tensor([x,y,w,h])
+                x, y, w, h = map(int, bbox)
 
         return image, masks
     

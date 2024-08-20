@@ -1,0 +1,12 @@
+datasets:
+  imagenet:
+    download: True
+    base_dir: /sadf/adf
+    imagenet_train:
+      image_directory: /train
+      annotation_directory: /val
+
+
+    imagenet_validation:
+      image_directory: /val
+      annotation_directory: /val

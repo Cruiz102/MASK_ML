@@ -64,7 +64,7 @@ class LayerNorm2d(nn.Module):
         x = self.weight[:, None, None] * x + self.bias[:, None, None]
         return x
         
-class MaskDecoder:
+class MaskDecoder(nn.Module):
     def __init__(self, config: MaskDecoderConfig):
         self.config = config
         self.num_multimask_outputs: int = 3
@@ -99,7 +99,7 @@ class MaskDecoder:
             x = transformer_block(tokens)
 
         iou_token_out = x[:, 0, :]
-        mask_tokens_out = x[:, 1 : (1 + self.config.num_multimask_outputs), :]\
+        mask_tokens_out = x[:, 1 : (1 + self.config.num_multimask_outputs), :]
         src = src.transpose(1, 2).view(b, c, h, w)
         upscaled_embedding = self.output_upscaling(src)
 

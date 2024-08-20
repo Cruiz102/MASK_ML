@@ -2,7 +2,6 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
 from torch.utils.data import DataLoader
-from utils import read_yaml
 from datasets import CocoSegmentationDataset
 from typing import List
 from vit import ViTConfig, VitModel
@@ -11,8 +10,9 @@ from vit import ViTConfig, VitModel
 def run_evaluation(cfg: DictConfig):
     # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
-
+    available_datasets = {}
     # Load dataset
+    
     dataset = CocoSegmentationDataset(cfg.evaluation.dataset_path)
     dataloader = DataLoader(dataset, batch_size=cfg.evaluation.batch_size, shuffle=False)
 

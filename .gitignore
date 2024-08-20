@@ -4,3 +4,4 @@ files
 *__pycache__
 .vscode
 development_log.txt
+config/model/outputs

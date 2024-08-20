@@ -1,0 +1,13 @@
+classification_datasets:
+  IMAGENET:
+    directory: fss
+
+  
+
+segmentation_datasets:
+  COCO:
+    image_dir: fss
+    annotation_dir: dss
+  SA1B:
+    directory: fss
+

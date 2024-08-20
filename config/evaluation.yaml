@@ -1,0 +1,8 @@
+defaults:
+  - model: segmentation_auto_encoder
+  - datasets: datasets
+
+dataset: coco
+task: classification
+batch_size: 8
+  
