@@ -1,5 +1,5 @@
 import torch
-from typing import Tuple
+from typing import Tuple, List
 from torch import Tensor
 import torch.nn as nn
 from transformer import TransformerConfig, TransformerBlock
@@ -80,10 +80,16 @@ class MaskDecoder(nn.Module):
             nn.ConvTranspose2d(config.transformer_config.embedded_size // 4, config.transformer_config.embedded_size // 8, kernel_size=2, stride=2),
             activation(),
         )
+        self.num_mask_tokens = self.num_multimask_outputs + 1
 
-        self.masks_mlp =  MLP(config.transformer_config.embedded_size, config.transformer_config.embedded_size,
-                           config.transformer_config.embedded_size,
-                            config.num_multimask_outputs)
+
+        self.masks_mlp_hypernetworks  = nn.ModuleList(
+            [
+                MLP(config.transformer_config.embedded_size, config.transformer_config.mlp_hidden_size,
+                     config.transformer_config.embedded_size // 8, 3)
+                for i in range(self.num_mask_tokens)
+            ]
+        )
 
         self.iou_mlp = MLP(config.transformer_config.embedded_size, config.transformer_config.embedded_size,
                            config.transformer_config.embedded_size,
@@ -102,8 +108,14 @@ class MaskDecoder(nn.Module):
         mask_tokens_out = x[:, 1 : (1 + self.config.num_multimask_outputs), :]
         src = src.transpose(1, 2).view(b, c, h, w)
         upscaled_embedding = self.output_upscaling(src)
+
+        # New upscale Shape
         b, c, h, w = upscaled_embedding.shape
 
+        hyper_in_list: List[torch.Tensor] = []
+        for i in range(self.num_mask_tokens):
+            hyper_in_list.append(self.masks_mlp_hypernetworks[i](mask_tokens_out[:, i, :]))
+        hyper_in = torch.stack(hyper_in_list, dim=1)
         masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
 
         # Generate mask quality predictions

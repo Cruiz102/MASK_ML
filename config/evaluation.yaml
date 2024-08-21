@@ -1,6 +1,6 @@
 defaults:
   - model: segmentation_auto_encoder
-  - datasets: classification
+  - datasets: segmentation
 
 output_dir: ./runs
 dataset: coco

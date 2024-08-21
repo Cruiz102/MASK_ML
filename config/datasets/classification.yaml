@@ -10,8 +10,7 @@ datasets:
     imagenet_validation:
       image_directory: /val
       annotation_directory: /val
-
-
+      
   cifar100:
     download : True
     base_dir: /asdf/asdf

@@ -1,3 +1,5 @@
+defaults:
+  - encoder: vit_encoder
+  - decoder: mask_decoder  # Assuming mask_decoder.yaml is in the model directory
+
 model_name: SegmentationAutoEncoder
-encoder: vit
-decoder: vit

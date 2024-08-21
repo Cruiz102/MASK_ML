@@ -1,0 +1,4 @@
+mask_decoder:
+  type: "TransformerDecoder"
+  num_layers: 6
+  d_model: 512

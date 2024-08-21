@@ -11,55 +11,37 @@ from torchvision.transforms.functional import to_tensor
 from utils import calculate_conv2d_output_dimensions, sinusoidal_positional_encoding
 from transformer import  TransformerBlock, TransformerConfig
 
+from dataclasses import dataclass, field
+from typing import Optional, Literal
+
+
+@dataclass
 class ViTConfig:
-    def __init__(
-        self,
-        config_file_path: Optional[str] = None,
-        transformer_config: TransformerConfig = TransformerConfig(),
-        transformer_blocks: int=10,
-        image_size:int = 256,
-        patch_size:int=16,
-        num_channels:int=3,
-        encoder_stride:int=16,
-        use_mask_token = False,
-        positinal_embedding: Literal["sinusoidal", 'rotary', 'learned'] = 'sinusoidal' 
-    ):
-        if config_file_path:
-            self.load_config_file(config_file_path)
+    # ViTConfig parameters
+    transformer_blocks: int = 10
+    image_size: int = 256
+    patch_size: int = 16
+    num_channels: int = 3
+    encoder_stride: int = 16
+    use_mask_token: bool = False
+    positional_embedding: Literal["sinusoidal", "rotary", "learned"] = "sinusoidal"
 
-        self.transformer_config = transformer_config
-        self.transformer_blocks = transformer_blocks
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_channels= num_channels
-        self.encoder_stride = encoder_stride
-        self.use_mask_token = use_mask_token
-        self.positional_embedding = positinal_embedding
-
-    def load_config_file(self, file_path: str):
-        config_params = read_yaml(file_path)
-        if config_params:
-            self.transformer_config.attention_heads = config_params['attention_heads']
-            self.transformer_config.mlp_hidden_size = config_params['mlp_hidden_size']
-            self.transformer_config.mlp_layers = config_params['mlp_layers']
-            self.transformer_config.dropout_prob = config_params['dropout_prob']
-
-            self.image_size = config_params['image_size']
-            self.patch_size = config_params['patch_size']
-            self.transformer_blocks = config_params['transformer_blocks']
-            self.num_channels = config_params['num_channels']
-            self.encoder_stride = config_params['encoder_stride']
-
-
+    # TransformerConfig parameters
+    embedded_size: int = 200
+    attention_heads: int = 5
+    mlp_hidden_size: int = 2
+    mlp_layers: int = 2
+    activation_function: str = "relu"
+    dropout_prob: float = 0.2
 
 
 class VITPatchEncoder(nn.Module):
     def __init__(self,config: ViTConfig):
         super(VITPatchEncoder, self).__init__()
         self.config = config
-        self.cls_token = nn.Parameter(torch.randn(1, 1, config.transformer_config.embedded_size))
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, config.transformer_config.embedded_size)) if use_mask_token else None
-        self.projection = nn.Conv2d(config.num_channels,config.transformer_config.embedded_size, config.patch_size, config.patch_size)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, config.embedded_size))
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, config.embedded_size)) if self.config.use_mask_token else None
+        self.projection = nn.Conv2d(config.num_channels,config.embedded_size, config.patch_size, config.patch_size)
         height_feature_map, width_feature_map = calculate_conv2d_output_dimensions(self.config.image_size, self.config.image_size, config.encoder_stride, config.patch_size)
         self.sequence_length  = height_feature_map * width_feature_map
 
@@ -67,10 +49,10 @@ class VITPatchEncoder(nn.Module):
         if config.positional_embedding == "learned":
             # Initialize absolute positional embedding with pretrain image size.
             self.pos_embed = nn.Parameter(
-                torch.zeros((1, self.sequence_length, self.config.transformer_config.embedded_size ))
+                torch.zeros((1, self.sequence_length, self.config.embedded_size ))
             ) 
         elif config.positional_embedding == "sinusoidal":
-            self.pos_embed = sinusoidal_positional_encoding(self.sequence_length, self.config.transformer_config.embedded_size)
+            self.pos_embed = sinusoidal_positional_encoding(self.sequence_length, self.config.embedded_size)
 
         
 
@@ -99,6 +81,9 @@ class VitModel(nn.Module):
     def __init__(self, config: ViTConfig):
         super(VitModel, self).__init__()
         self.config = config
+        self.transformer_config = TransformerConfig(
+            config.embedded_size
+        )
         self.embedded_layer = VITPatchEncoder(config)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(config.transformer_config) for _ in range(self.config.transformer_blocks)])
     def load_config(self):

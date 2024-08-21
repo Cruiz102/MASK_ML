@@ -15,13 +15,15 @@ from torchvision.transforms import Resize
 import json
 from torch.utils.data import DataLoader
 import torchvision
+from download_dataset import download_and_extract_files
 
 
-def create_dataloader(dataset_name: str, image_dir : str, annotation_dir: str, batch_size: int, shuffle: bool = False) -> DataLoader:
+def create_dataloader(dataset_name: str, image_dir : str, annotation_dir: str, batch_size: int,
+                       shuffle: bool = False, download = False) -> DataLoader:
     if dataset_name == "coco":
-        dataset = CocoSegmentationDataset(annotation_dir, image_dir)
+        dataset = CocoSegmentationDataset(annotation_dir, image_dir, download=download)
     elif dataset_name == "sa1b":
-        dataset = SA1BImageDataset(image_dir)
+        dataset = SA1BImageDataset(image_dir, download = download)
     elif dataset_name == 'cifar100':
         dataset = dataset = torchvision.datasets.CIFAR100(image_dir, download=True)
         
@@ -32,11 +34,13 @@ def create_dataloader(dataset_name: str, image_dir : str, annotation_dir: str, b
 
 class CocoSegmentationDataset(Dataset):
     def __init__(self, 
-                 annotation_dir: str = "/home/cesarruiz/Downloads/panoptic_annotations_trainval2017/instances_val2017.json",
-                 img_dir: str = "/home/cesarruiz/Downloads/val2017/",
+                 annotation_dir: str ,
+                 img_dir: str ,
                  image_size: tuple = (256, 256),
                  objects_num: int = 1,
+                 download = False
                  ):
+        self.download = download
         self.image_size = image_size
         self.coco_tool = COCO(annotation_dir)
         self.img_dir = img_dir
@@ -68,7 +72,14 @@ class CocoSegmentationDataset(Dataset):
         target_objects = list(range(self.objects_num))     
         target_objects = np.random.choice(target_objects, size=self.objects_num, replace=False)
 
-        
+        if self.download:
+        #Check if the directory exists
+            if not os.path.exists(self.img_dir):
+                # If it does not exist, create it
+                download_and_extract_files()
+                print(f"Directory '{self.img_dir}' created.")
+            else:
+                print(f"Directory '{self.img_dir}' already exists.")
 
         #FIXME: There is going to be an index access error if the number of annotations is less than self.objects_num
         for i in target_objects:
@@ -89,14 +100,13 @@ class CocoSegmentationDataset(Dataset):
             if 'bbox' in anns[i]:
                 x, y, w, h = map(int, anns[i]['bbox'])
                 box_data  = torch.tensor([x,y,w,h])
-                x, y, w, h = map(int, bbox)
 
-        return image, masks
+        return image, masks, box_data
     
 
 
 class SA1BImageDataset(Dataset):
-    def __init__(self, root_dir, transforms=None):
+    def __init__(self, root_dir, transforms=None, download = False):
         """
         Args:
             root_dir (string): Directory with all the images and JSON files.

@@ -1,5 +1,4 @@
-
-model_name: VITClassification
+model_name: VitEncoder
 attention_heads: 8
 mlp_hidden_size: 512
 mlp_layers: 2
@@ -11,11 +10,3 @@ patch_size: 16
 num_channels: 3
 encoder_stride: 16
 positional_embedding: "sinusoidal"
-
-# Transformer Heads
-embedded_size: 400
-attention_heads: 4
-mlp_hidden_size: 50
-mlp_layers: 2
-activation_function: 'relu'
-dropout_prob: 0.2

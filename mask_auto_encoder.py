@@ -15,13 +15,13 @@ class SegmentationAutoEncoder(nn.Module):
         self.decoder = decoder 
 
 
-    def forward(self, x: Union[Tensor, np.ndarray, List[Image.Image]], attention_heads_idx: List[int]):
-        input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
+    def forward(self, images: Union[Tensor, np.ndarray, List[Image.Image]], attention_heads_idx: List[int]):
+        x = torch.stack([self.preprocess(img) for img in images], dim=0)
 
         y = self.encoder(x, attention_heads_idx)
-        y = self.decoder(y, attention_heads_idx)
+        y = self.decoder(y)
         return y
-    def preprocess(self, x: torch.Tensor) -> torch.Tensor:
+    def preprocess(self, img: torch.Tensor) -> torch.Tensor:
         """Normalize pixel values and pad to a square input."""
         # Normalize colors
         x = (x - self.pixel_mean) / self.pixel_std

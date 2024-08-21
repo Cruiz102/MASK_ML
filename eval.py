@@ -14,14 +14,40 @@ def run_evaluation(cfg: DictConfig):
     # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
 
-    dataset = cfg['dataset']
-    data_image_dir =  cfg[dataset][dataset]['base_dir'] + cfg[dataset][f'{dataset}_validation']['image_directory']
-    data_annotation_dir = cfg[dataset][dataset]['base_dir'] + cfg[dataset][f'{dataset}_validation']['annotation_directory']
+    dataset_name = cfg['dataset']
+    data_image_dir =  cfg['dataset'][dataset_name]['base_dir'] + cfg['dataset'][f'{dataset_name}_validation']['image_directory']
+    data_annotation_dir = cfg['dataset'][dataset_name]['base_dir'] + cfg['dataset'][f'{dataset_name}_validation']['annotation_directory']
     batch_size = cfg['batch_size']
     task = cfg['task']
     attention_heads_to_visualize = cfg['visualization']['attention_heads']
 
-    dataloader = create_dataloader(dataset, image_dir=data_image_dir, annotation_dir= data_annotation_dir,batch_size=batch_size)
+    dataloader = create_dataloader(dataset_name, image_dir=data_image_dir, annotation_dir= data_annotation_dir,batch_size=batch_size, cfg['dataset'])
+
+    model_name = cfg['model']['model_name']
+
+    if model_name == 'vit_classification':
+        model_config = ViTConfig(
+            transformer_blocks=cfg.model.transformer_blocks,
+            image_size=cfg.model.image_size,
+            patch_size=cfg.model.patch_size,
+            num_channels=cfg.model.num_channels,
+            encoder_stride=cfg.model.encoder_stride,
+            use_mask_token=False,
+            positional_embedding=cfg.model.positional_embedding,
+            embedded_size=cfg.model.embedded_size,
+            attention_heads=cfg.model.attention_heads,
+            mlp_hidden_size=cfg.model.mlp_hidden_size,
+            mlp_layers=cfg.model.mlp_layers,
+            activation_function= cfg.model.activation_function,
+            dropout_prob=cfg.model.dropout_prob)
+        
+    # elif model_name == "SegmentationAutoEncoder":
+
+
+
+
+
+
 
     # Load the ViT configuration and model
     vit_config = ViTConfig(

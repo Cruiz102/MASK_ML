@@ -10,6 +10,20 @@ import requests
 import math
 from typing import Optional, Union, Tuple, List, Literal
 
+from dataclasses import dataclass, field
+from typing import Optional, Literal
+
+
+@dataclass
+class TransformerConfig:
+    embedded_size : int=  200
+    attention_heads: int = 5
+    mlp_hidden_size: int = 2
+    mlp_layers: int = 2
+    activation_function: str = "relu"
+    dropout_prob : float = 0.2
+
+
 
 
 

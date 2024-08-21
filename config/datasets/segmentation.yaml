@@ -1,15 +1,15 @@
 datasets:
   coco:
-    download:
-    base_dir: /sadf/adf
+    download: True
+    base_dir: ./downloads/coco
     coco_train:
-      image_dir: /train
-      annotation_dir: /val
+      image_dir: /
+      annotation_dir: /
 
 
-    coco_val:
-      image_dir: /val
-      annotation_dir: /val
+    coco_validation:
+      image_dir: validation/images/val2017/
+      annotation_dir: validation/annotation/annotations/instances_val2017.json
 
 
   sa1b:
@@ -18,7 +18,7 @@ datasets:
     sa1b_train:
       image_dir: /train
       annotation_dir: /asdf
-    sa1b_val:
+    sa1b_validation:
       image_dir: /asdf
       annotation_dir: /asf
 
