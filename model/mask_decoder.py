@@ -2,9 +2,28 @@ import torch
 from typing import Tuple, List
 from torch import Tensor
 import torch.nn as nn
-from transformer import TransformerConfig, TransformerBlock
+from model.transformer import TransformerConfig, TransformerBlock
 from torch.nn import functional as F
-from utils import sinusoidal_positional_encoding
+from utils.utils import sinusoidal_positional_encoding
+
+from dataclasses import dataclass, field
+from typing import Literal, Optional
+@dataclass
+class MaskDecoderConfig:
+    transformer_blocks: int
+    num_multimask_outputs: int 
+    iou_mlp_layer_depth: int
+
+    # TransformerConfig parameters
+    embedded_size: int = 200
+    attention_heads: int = 5
+    mlp_hidden_size: int = 2
+    mlp_layers: int = 2
+    activation_function: str = "relu"
+    dropout_prob: float = 0.2
+
+
+
 
 # Lightly adapted from
 # https://github.com/facebookresearch/MaskFormer/blob/main/mask_former/modeling/transformer/transformer_predictor.py # noqa
@@ -32,19 +51,6 @@ class MLP(nn.Module):
             x = F.sigmoid(x)
         return x
 
-class MaskDecoderConfig:
-    def __init__(self,
-        positional_embedding,
-        transformer_config: TransformerConfig,
-        transformer_blocks: int,
-        num_multimask_outputs: int ,
-        iou_mlp_layer_depth: int,
-                 ) -> None:
-        self.positional_embedding = positional_embedding
-        self.transformer_config = transformer_config
-        self.transformer_blocks = transformer_blocks
-        self.num_multimask_outputs = num_multimask_outputs
-        self.iou_mlp_layer_depth = iou_mlp_layer_depth
 
 
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import List
 from torch.utils.data import Dataset, DataLoader
-from datasets import CocoSegmentationDataset, SA1BImageDataset
+from utils.datasets import CocoSegmentationDataset, SA1BImageDataset
 import cv2
 import os
 import logging

@@ -5,8 +5,17 @@ from torch import Tensor
 from typing import Union, List
 import numpy as np
 from PIL import Image
-from vit import VitModel
-from mask_decoder import MaskDecoder
+from model.vit import VitModel, ViTConfig
+from model.mask_decoder import MaskDecoder
+
+from dataclasses import dataclass, field
+from typing import Optional, Literal
+
+@dataclass
+class SegmentationAutoEncoderConfig:
+    # ViTConfig parameters
+    encoder_config: ViTConfig
+    decoder_config: MaskDecoder
 
 class SegmentationAutoEncoder(nn.Module):
     def __init__(self, encoder: VitModel, decoder: MaskDecoder ) -> None:

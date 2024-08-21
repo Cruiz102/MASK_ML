@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 REQUIRED_PACKAGES = [
-    'hydra-core==1.3.2'
+    'hydra-core==1.3.2',
+    'pycocotools==2.0.7'
 ]
 setup(
     name="ml_mask",

@@ -2,10 +2,11 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
 from torch.utils.data import DataLoader
-from datasets import create_dataloader
+from utils.datasets import create_dataloader
 from typing import List
-from vit import ViTConfig, VitModel
-from mask_auto_encoder import SegmentationAutoEncoder
+from model.vit import ViTConfig, VitModel
+from model.mask_decoder import MaskDecoderConfig
+from model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 import os
 import tqdm
 
@@ -41,7 +42,44 @@ def run_evaluation(cfg: DictConfig):
             activation_function= cfg.model.activation_function,
             dropout_prob=cfg.model.dropout_prob)
         
-    # elif model_name == "SegmentationAutoEncoder":
+
+        model = VitModel(model_config)
+        
+    elif model_name == "SegmentationAutoEncoder":
+        encoder_config = ViTConfig(
+            transformer_blocks=cfg.model.encoder.transformer_blocks,
+            image_size=cfg.model.encoder.image_size,
+            patch_size=cfg.model.encoder.patch_size,
+            num_channels=cfg.model.encoder.num_channels,
+            encoder_stride=cfg.model.encoder.encoder_stride,
+            use_mask_token=True,
+            positional_embedding=cfg.model.encoder.positional_embedding,
+            embedded_size=cfg.model.encoder.embedded_size,
+            attention_heads=cfg.model.encoder.attention_heads,
+            mlp_hidden_size=cfg.model.encoder.mlp_hidden_size,
+            mlp_layers=cfg.model.encoder.mlp_layers,
+            activation_function= cfg.model.encoder.activation_function,
+            dropout_prob=cfg.model.encoder.dropout_prob)
+    
+        decoder_config = MaskDecoderConfig(
+            transformer_blocks=cfg.model.decoder.transformer_blocks,
+            num_multimask_outputs=cfg.model.decoder.num_multitask_outputs,
+            iou_mlp_layer_depth=cfg.model.decoder.iou_mlp_layer_depth,
+            embedded_size= cfg.model.decoder.embedded_size,
+            attention_heads=cfg.model.decoder.attention_heads,
+            mlp_hidden_size=cfg.model.encoder.mlp_hidden_size,
+            mlp_layers=cfg.model.encoder.mlp_layers,
+            activation_function= cfg.model.encoder.activation_function,
+            dropout_prob=cfg.model.encoder.dropout_prob)
+
+        model_config = SegmentationAutoEncoderConfig(
+            encoder_config=encoder_config,
+            decoder_config= decoder_config
+        )
+
+        model = SegmentationAutoEncoder(model_config)
+
+
 
 
 

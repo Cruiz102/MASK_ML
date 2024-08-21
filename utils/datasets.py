@@ -9,13 +9,13 @@ import os
 from torchvision.io import read_image
 import numpy as np
 from torchvision.transforms.functional import to_tensor
-from utils import PreProcessor
+from utils.utils import PreProcessor
 import torch.functional as F
 from torchvision.transforms import Resize
 import json
 from torch.utils.data import DataLoader
 import torchvision
-from download_dataset import download_and_extract_files
+from utils.download_dataset import download_and_extract_files
 
 
 def create_dataloader(dataset_name: str, image_dir : str, annotation_dir: str, batch_size: int,

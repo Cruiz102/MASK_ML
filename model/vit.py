@@ -6,10 +6,10 @@ from typing import Optional, Union, Tuple, List, Literal
 from PIL import Image
 import logging
 import numpy as np
-from utils import read_yaml
+from utils.utils import read_yaml
 from torchvision.transforms.functional import to_tensor
-from utils import calculate_conv2d_output_dimensions, sinusoidal_positional_encoding
-from transformer import  TransformerBlock, TransformerConfig
+from utils.utils import calculate_conv2d_output_dimensions, sinusoidal_positional_encoding
+from model.transformer import  TransformerBlock, TransformerConfig
 
 from dataclasses import dataclass, field
 from typing import Optional, Literal
@@ -126,7 +126,7 @@ class VitClassificationHead(nn.Module):
 
 
 if __name__ == "__main__":
-    from datasets import CocoSegmentationDataset
+    from utils.datasets import CocoSegmentationDataset
     dataset  = CocoSegmentationDataset()
     image,  mask = dataset[0]
     image = image.unsqueeze(0)

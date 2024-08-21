@@ -2,10 +2,10 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
 from torch.utils.data import DataLoader
-from utils import read_yaml
-from datasets import CocoSegmentationDataset
+from utils.utils import read_yaml
+from utils.datasets import CocoSegmentationDataset
 from typing import List
-from vit import ViTConfig, VitModel
+from model.vit import ViTConfig, VitModel
 
 @hydra.main(config_path="config", config_name="evaluation")
 def run_evaluation(cfg: DictConfig):
