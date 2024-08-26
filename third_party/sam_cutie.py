@@ -6,6 +6,9 @@ from torch import Tensor
 import numpy as np
 from ultralytics import SAM
 import cv2
+
+# from torchvision.transforms.functional import to_tensor
+
 class SamCutiePipeline:
     def __init__(self):
 
@@ -16,6 +19,7 @@ class SamCutiePipeline:
         self.masks = torch.Tensor()
         self.objects_names = []
         self.objects_images = []
+        self.last_mask = torch.zeros(1).cuda()
         super().__init__()
     def save_object(self,object_name: str, image: np.ndarray, points: Union[np.ndarray, List, None] = None,point_labels: Optional[List] = None,
                      mask: Optional[np.ndarray] = None) ->Tuple[Tensor, Tensor]:
@@ -24,9 +28,10 @@ class SamCutiePipeline:
         self.objects_names.append(object_name)
         self.objects_images.append(image)
         self.objects = list(range(1, len(self.objects_names) +1))
+        print(self.objects, "objectsss")
         if points is not None:    
             ultra_sam_prediciton = self.sam_model.predict(image, points=points, labels=point_labels)
-            mask = ultra_sam_prediciton[0].masks.data
+            mask = ultra_sam_prediciton[0].masks.data.to(dtype=torch.int)
             print('mask', mask)
 
         if len(self.masks) == 0:
@@ -37,8 +42,13 @@ class SamCutiePipeline:
             mask = np.array(mask[0]).astype(np.uint8)
             mask[mask==1] = len(self.objects)
             self.masks = mask 
-        img  = torch.from_numpy(image).cuda().float()
+        objects = np.unique(self.masks.cpu().numpy())
+        self.objects = objects[objects != 0].tolist()
+        img  = torch.from_numpy(image).cuda().float()/255
+        img =img.permute(2, 0, 1) 
+        print(self.masks.shape)
         mask = self.processor.step(img, self.masks, objects=self.objects)
+        print("wiii", mask.shape, mask)
         return img, mask
 
     def _create_mask_channels(self,output_mask: torch.Tensor) -> torch.Tensor:
@@ -52,8 +62,17 @@ class SamCutiePipeline:
 
     def predict_mask(self, img):
         img_tensors = torch.from_numpy(img).cuda().float()
+        
+        img_tensors = img_tensors / 255.0
+        img_tensors =img_tensors.permute(2, 0, 1) 
+        # print(img_tensors.dtype, "img")
         output_probs = self.processor.step(img_tensors)
         masks = self.processor.output_prob_to_mask(output_probs)
-        masks = self._create_mask_channels(self.masks).cpu().numpy()
+        masks = self._create_mask_channels(masks)
+        # print("output", output_probs)
+        # print(output_probs.device, self.last_mask.device)
+        if torch.equal(output_probs, self.last_mask):
+            print("Something Wrong in here>: Same Image??")
+        self.last_mask = output_probs
         return masks
     

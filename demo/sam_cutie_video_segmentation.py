@@ -4,8 +4,8 @@ from typing import List, Optional
 import torch
 import numpy as np
 from third_party.sam_cutie import SamCutiePipeline
-from utils.annotations import DrawAnnotator
-from .utils import BBoxOutput, generate_random_rgb
+from mask_ml.utils.annotations import DrawAnnotator
+from utils import BBoxOutput, generate_random_rgb, to_bbox
 points = []
 points_labels = []
 objects_colors = {}
@@ -28,7 +28,7 @@ def update_objects(bbox: List[BBoxOutput]):
         if box.track_id not in objects_colors:
             objects_colors[box.track_id] = generate_random_rgb()
 @torch.inference_mode()
-@torch.autocast("cuda")
+@torch.cuda.amp.autocast()
 def main():
     global is_paused, pipeline, points, objects_colors
     annotator = DrawAnnotator()
@@ -41,9 +41,9 @@ def main():
         ret, image = cap.read()
         if pipeline.objects:
             mask = pipeline.predict_mask(image)
-            detected_bbox = 
+            detected_bbox = to_bbox(mask)
             update_objects(detected_bbox)
-            # image = annotator.draw_bbox(image,detected_bbox,object_color=objects_colors ,names= names, draw_mask=True)     
+            image = annotator.draw_bbox(image,detected_bbox,object_color=objects_colors , draw_mask=True)     
         image_with_circles = image.copy()
         for i, point in enumerate(points):
             if points_labels[i] == 1:
