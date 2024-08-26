@@ -1,14 +1,11 @@
 import torch.amp
 import cv2
-from typing import List
+from typing import List, Optional
 import torch
 import numpy as np
-from third_party.sam_cutie import SamCutiePipeline, BBoxOutput, DrawAnnotator, generate_random_rgb
-import sys
-import os
-
-
-
+from third_party.sam_cutie import SamCutiePipeline
+from utils.annotations import DrawAnnotator
+from .utils import BBoxOutput, generate_random_rgb
 points = []
 points_labels = []
 objects_colors = {}
@@ -35,17 +32,18 @@ def update_objects(bbox: List[BBoxOutput]):
 def main():
     global is_paused, pipeline, points, objects_colors
     annotator = DrawAnnotator()
-    cap = cv2.VideoCapture(2)
+    cap = cv2.VideoCapture(0)
     names = {0: "Object"}
     cv2.namedWindow('demo', cv2.WINDOW_AUTOSIZE)
     cv2.setMouseCallback("demo", update_global_variables)
     object_counter = 0
     while True:
-        image = cap.read()
+        ret, image = cap.read()
         if pipeline.objects:
-            detected_bbox = pipeline.get_bounding_box(image)
+            mask = pipeline.predict_mask(image)
+            detected_bbox = 
             update_objects(detected_bbox)
-            image = annotator.draw_bbox(image,detected_bbox,object_color=objects_colors ,names= names, draw_mask=True)     
+            # image = annotator.draw_bbox(image,detected_bbox,object_color=objects_colors ,names= names, draw_mask=True)     
         image_with_circles = image.copy()
         for i, point in enumerate(points):
             if points_labels[i] == 1:
@@ -56,11 +54,8 @@ def main():
         if len(points) > 1:
             cv2.imshow("demo", image_with_circles)  
         else:
-
             cv2.imshow("demo", image)
-
         key = cv2.waitKey(1)
-
         if key == ord("p"):
             is_paused ^= True
         if key == ord("a"):
