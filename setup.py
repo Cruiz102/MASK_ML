@@ -13,3 +13,5 @@ setup(
     install_requires=REQUIRED_PACKAGES,
     python_requires=">=3.10.12",
 )
+# pip uninstall opencv-python-headless opencv-python
+# pip install opencv-python

@@ -26,7 +26,6 @@ class SamCutiePipeline:
         if mask is not None and points is not None:
             raise Exception("Both points and mask were specified but only one must be set.")
         self.objects_names.append(object_name)
-        self.objects_images.append(image)
         self.objects = list(range(1, len(self.objects_names) +1))
         print(self.objects, "objectsss")
         if points is not None:    
@@ -39,9 +38,10 @@ class SamCutiePipeline:
             self.masks =mask[0]
             self.objects_images = torch.from_numpy(image)
         else:
-            mask = np.array(mask[0]).astype(np.uint8)
+            mask = np.array(mask.cpu()[0]).astype(np.uint8)
             mask[mask==1] = len(self.objects)
-            self.masks = mask 
+            self.masks = torch.from_numpy(mask).cuda() 
+        self.objects_images = torch.cat([self.objects_images, torch.from_numpy(image)], 0)
         objects = np.unique(self.masks.cpu().numpy())
         self.objects = objects[objects != 0].tolist()
         img  = torch.from_numpy(image).cuda().float()/255
