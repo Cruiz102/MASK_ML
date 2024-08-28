@@ -14,15 +14,14 @@ import tqdm
 def run_evaluation(cfg: DictConfig):
     # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
-
     dataset_name = cfg['dataset']
-    data_image_dir =  cfg['dataset'][dataset_name]['base_dir'] + cfg['dataset'][f'{dataset_name}_validation']['image_directory']
-    data_annotation_dir = cfg['dataset'][dataset_name]['base_dir'] + cfg['dataset'][f'{dataset_name}_validation']['annotation_directory']
+    data_image_dir =  cfg['datasets'][dataset_name]['base_dir'] + cfg['datasets'][dataset_name][f'{dataset_name}_validation']['image_dir']
+    data_annotation_dir = cfg['datasets'][dataset_name]['base_dir'] + cfg['datasets'][dataset_name][f'{dataset_name}_validation']['annotation_dir']
     batch_size = cfg['batch_size']
     task = cfg['task']
     attention_heads_to_visualize = cfg['visualization']['attention_heads']
 
-    dataloader = create_dataloader(dataset_name, image_dir=data_image_dir, annotation_dir= data_annotation_dir,batch_size=batch_size, cfg['dataset'])
+    dataloader = create_dataloader(dataset_name=dataset_name, image_dir=data_image_dir, annotation_dir= data_annotation_dir,batch_size=batch_size, )
 
     model_name = cfg['model']['model_name']
 
@@ -79,26 +78,6 @@ def run_evaluation(cfg: DictConfig):
 
         model = SegmentationAutoEncoder(model_config)
 
-
-
-
-
-
-
-
-
-    # Load the ViT configuration and model
-    vit_config = ViTConfig(
-        transformer_config=cfg.vit_model.transformer_config,
-        transformer_blocks=cfg.vit_model.transformer_blocks,
-        image_size=cfg.vit_model.image_size,
-        patch_size=cfg.vit_model.patch_size,
-        num_channels=cfg.vit_model.num_channels,
-        encoder_stride=cfg.vit_model.encoder_stride,
-        positinal_embedding=cfg.vit_model.positional_embedding
-    )
-
-    model = VitModel(vit_config)
     model.eval()  # Set the model to evaluation mode
 
    # Create a directory to save the outputs and visualizations
