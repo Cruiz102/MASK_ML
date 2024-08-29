@@ -1,4 +1,10 @@
-mask_decoder:
-  type: "TransformerDecoder"
-  num_layers: 6
-  d_model: 512
+
+transformer_blocks: 10
+num_multimask_outputs: 3
+iou_mlp_depth: 3
+mlp_hidden_size: 100
+embedded_size: 200
+attention_heads: 2
+transformer_mlp_layers: 4
+activation_functions: 'relu'
+dropout_prob: 0.2

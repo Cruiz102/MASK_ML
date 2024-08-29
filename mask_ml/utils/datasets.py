@@ -9,28 +9,48 @@ import os
 from torchvision.io import read_image
 import numpy as np
 from torchvision.transforms.functional import to_tensor
-from utils.utils import PreProcessor
 import torch.functional as F
 from torchvision.transforms import Resize
 import json
 from torch.utils.data import DataLoader
 import torchvision
-from utils.download_dataset import download_and_extract_files
+from mask_ml.utils.download_dataset import download_and_extract_files
 
+import os
+import hydra
+from omegaconf import DictConfig, OmegaConf
+from torch.utils.data import DataLoader
+import torchvision
 
-def create_dataloader(dataset_name: str, image_dir : str, annotation_dir: str, batch_size: int,
-                       shuffle: bool = False, download = False) -> DataLoader:
+# Assuming you have these dataset classes defined somewhere
+# from your_datasets_module import CocoSegmentationDataset, SA1BImageDataset
+
+def create_dataloader(cfg: DictConfig) -> DataLoader:
+    dataset_name = cfg['dataset']
+    
+    # Get the paths from the config
+    image_dir = cfg['datasets'][dataset_name]['base_dir']
+    batch_size = cfg['batch_size']
+    shuffle = cfg.get('shuffle', False)
+    download = cfg.get('download', False)
+    
+    # Select the appropriate dataset
     if dataset_name == "coco":
-        dataset = CocoSegmentationDataset(annotation_dir, image_dir, download=download)
+        dataset = CocoSegmentationDataset("annotation_dir", image_dir, download=download)
     elif dataset_name == "sa1b":
-        dataset = SA1BImageDataset(image_dir, download = download)
+        dataset = SA1BImageDataset(image_dir, download=download)
     elif dataset_name == 'cifar100':
-        dataset = dataset = torchvision.datasets.CIFAR100(image_dir, download=True)
-        
-    dataloader  = DataLoader(dataset,batch_size= batch_size, shuffle = shuffle)
+        dataset = torchvision.datasets.CIFAR100(image_dir, download=True)
+    else:
+        raise ValueError(f"Unsupported dataset: {dataset_name}")
+    
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
     return dataloader
 
+
+def preproccess():
+    pass
 
 class CocoSegmentationDataset(Dataset):
     def __init__(self, 

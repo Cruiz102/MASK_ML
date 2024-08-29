@@ -6,10 +6,9 @@ from typing import Optional, Union, Tuple, List, Literal
 from PIL import Image
 import logging
 import numpy as np
-from utils.utils import read_yaml
 from torchvision.transforms.functional import to_tensor
-from utils.utils import calculate_conv2d_output_dimensions, sinusoidal_positional_encoding
-from model.transformer import  TransformerBlock, TransformerConfig
+from mask_ml.utils.utils import calculate_conv2d_output_dimensions, sinusoidal_positional_encoding
+from mask_ml.model.transformer import  TransformerBlock, TransformerConfig
 
 from dataclasses import dataclass, field
 from typing import Optional, Literal
@@ -82,10 +81,17 @@ class VitModel(nn.Module):
         super(VitModel, self).__init__()
         self.config = config
         self.transformer_config = TransformerConfig(
-            config.embedded_size
+            embedded_size=config.embedded_size,
+            attention_heads= config.attention_heads,
+            mlp_hidden_size=config.mlp_hidden_size,
+            mlp_layers=config.mlp_layers,
+            activation_function=config.activation_function,
+            dropout_prob= config.dropout_prob
+
+            
         )
         self.embedded_layer = VITPatchEncoder(config)
-        self.transformer_blocks = nn.ModuleList([TransformerBlock(config.transformer_config) for _ in range(self.config.transformer_blocks)])
+        self.transformer_blocks = nn.ModuleList([TransformerBlock(self.transformer_config) for _ in range(self.config.transformer_blocks)])
     def load_config(self):
         pass
 

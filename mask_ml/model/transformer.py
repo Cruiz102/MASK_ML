@@ -64,18 +64,6 @@ class MLP(nn.Module):
         return x
 
 
-class TransformerConfig:
-    def __init__(self) -> None:
-
-        self.embedded_size=  200
-        self.attention_heads = 5
-        self.mlp_hidden_size = 2
-        self.mlp_layers = 2
-        self.activation_function = "relu"
-        self.dropout_prob = 0.2
-
-
-
 # Copied from transformers.models.llama.modeling_llama.LlamaRotaryEmbedding with Llama->Phi
 class RotaryEmbedding(nn.Module):
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):

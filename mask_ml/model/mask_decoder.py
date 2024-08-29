@@ -2,9 +2,9 @@ import torch
 from typing import Tuple, List
 from torch import Tensor
 import torch.nn as nn
-from model.transformer import TransformerConfig, TransformerBlock
+from mask_ml.model.transformer import TransformerConfig, TransformerBlock
 from torch.nn import functional as F
-from utils.utils import sinusoidal_positional_encoding
+from mask_ml.utils.utils import sinusoidal_positional_encoding
 
 from dataclasses import dataclass, field
 from typing import Literal, Optional

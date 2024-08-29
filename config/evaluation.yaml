@@ -1,12 +1,11 @@
 defaults:
-  - model: segmentation_auto_encoder
-  - datasets: segmentation
+  - model: vit_classification
+  - datasets: classification
 
 output_dir: ./runs
-dataset: coco
+dataset: cifar100
 task: classification
 batch_size: 8
 
 visualization:
   attention_heads: [1]
-  

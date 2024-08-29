@@ -9,4 +9,5 @@ image_size: 256
 patch_size: 16
 num_channels: 3
 encoder_stride: 16
+activation_function: 'relu'
 positional_embedding: "sinusoidal"

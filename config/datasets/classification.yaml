@@ -1,24 +1,18 @@
-datasets:
-  imagenet:
-    download: True
-    base_dir: /sadf/adf
-    imagenet_train:
-      image_dir: /train
-      annotation_dir: /val
+
+imagenet:
+  download: True
+  base_dir: /sadf/adf
+  imagenet_train:
+    image_dir: /train
+    annotation_dir: /val
 
 
-    imagenet_validation:
-      image_dir: /val
-      annotation_dir: /val
-      
-  cifar100:
-    download : True
-    base_dir: /asdf/asdf
-    cifar100_train:
-      image_dir: /train
-      annotation_dir: /val
-    cifar100_validation:
-      image_dir: /train
-      annotation_dir: /val
+  imagenet_validation:
+    image_dir: /val
+    annotation_dir: /val
+    
+cifar100:
+  download : True
+  base_dir: ./
 
-      
+    

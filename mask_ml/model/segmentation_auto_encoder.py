@@ -5,8 +5,8 @@ from torch import Tensor
 from typing import Union, List
 import numpy as np
 from PIL import Image
-from model.vit import VitModel, ViTConfig
-from model.mask_decoder import MaskDecoderConfig, MaskDecoder
+from mask_ml.model.vit import VitModel, ViTConfig
+from mask_ml.model.mask_decoder import MaskDecoderConfig, MaskDecoder
 from torchvision.transforms.functional import to_tensor
 
 from dataclasses import dataclass, field
