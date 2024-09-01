@@ -2,24 +2,21 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import datasets
 from torchvision.transforms import ToTensor
+from torchvision import transforms
 import matplotlib.pyplot as plt
 from pycocotools.coco import COCO
 from pycocotools import mask as maskUtils
 import os
 from torchvision.io import read_image
 import numpy as np
-from torchvision.transforms.functional import to_tensor
 import torch.functional as F
 from torchvision.transforms import Resize
 import json
 from torch.utils.data import DataLoader
 import torchvision
 from mask_ml.utils.download_dataset import download_and_extract_files
-
 import os
-import hydra
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import DataLoader
 import torchvision
 
 # Assuming you have these dataset classes defined somewhere
@@ -33,6 +30,7 @@ def create_dataloader(cfg: DictConfig) -> DataLoader:
     batch_size = cfg['batch_size']
     shuffle = cfg.get('shuffle', False)
     download = cfg.get('download', False)
+    image_size = cfg.get("image_size", 256)
     
     # Select the appropriate dataset
     if dataset_name == "coco":
@@ -40,17 +38,21 @@ def create_dataloader(cfg: DictConfig) -> DataLoader:
     elif dataset_name == "sa1b":
         dataset = SA1BImageDataset(image_dir, download=download)
     elif dataset_name == 'cifar100':
-        dataset = torchvision.datasets.CIFAR100(image_dir, download=True)
+        # Define the transformation to convert images to tensors and normalize
+        transform = transforms.Compose([
+            transforms.ToTensor(),  # Convert PIL Image to Tensor
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Resize((256, 256)),  # Resize the image to 64x64 pixels
+        ])
+        dataset = torchvision.datasets.CIFAR100(image_dir, download=True, transform= transform)
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
     
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    print(dataset_name, "This is the dataset name")
 
     return dataloader
 
-
-def preproccess():
-    pass
 
 class CocoSegmentationDataset(Dataset):
     def __init__(self, 

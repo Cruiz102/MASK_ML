@@ -2,23 +2,8 @@
 coco:
   download: True
   base_dir: ./downloads/coco
-  coco_train:
-    image_dir: /
-    annotation_dir: /
 
-
-  coco_validation:
-    image_dir: validation/images/val2017/
-    annotation_dir: validation/annotation/annotations/instances_val2017.json
     
 sa1b:
   download: False
   base_dir: /asdf/ads
-  sa1b_train:
-    image_dir: /train
-    annotation_dir: /asdf
-  sa1b_validation:
-    image_dir: /asdf
-    annotation_dir: /asf
-
-

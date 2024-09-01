@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
+from torch.optim.adamw import AdamW
 from typing import List
 from torch.utils.data import Dataset, DataLoader
 from utils.datasets import CocoSegmentationDataset, SA1BImageDataset
 import cv2
 import os
 import logging
+from mask_ml.utils.datasets import create_dataloader
 
 
 def draw_mask_on_image(images, masks):
@@ -49,19 +51,13 @@ def iou_evaluation(pred_mask, target_mask):
 class Trainer:
     def __init__(self, config: TrainerConfig) -> None:
         self.config = config
-        if config.dataset == "coco":
-            self.dataset = CocoSegmentationDataset()
-        elif config.dataset == "sa-1b":
-            self.dataset = SA1BImageDataset()
-
-        self.dataloader = DataLoader(self.dataset, batch_size=self.config.batch_size, shuffle=True)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.config.image_encoder.to(self.device)
         self.config.mask_decoder.to(self.device)
 
     def train(self):
         # Set up optimizer and learning rate scheduler
-        optimizer = torch.optim.AdamW(
+        optimizer = AdamW(
             list(self.config.image_encoder.parameters()) + list(self.config.mask_decoder.parameters()),
             lr=self.config.learning_rate
         )
@@ -69,12 +65,11 @@ class Trainer:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=self.config.lr_scheduler[0])
 
         # Loss function
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.CrossEntropyLoss()
 
         # Training loop
         for step in range(self.config.steps):
-            self.config.image_encoder.train()
-            self.config.mask_decoder.train()
+
 
             for batch in self.dataloader:
                 images = batch['image'].to(self.device)

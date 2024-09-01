@@ -41,8 +41,8 @@ class VITPatchEncoder(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, config.embedded_size))
         self.mask_token = nn.Parameter(torch.zeros(1, 1, config.embedded_size)) if self.config.use_mask_token else None
         self.projection = nn.Conv2d(config.num_channels,config.embedded_size, config.patch_size, config.patch_size)
-        height_feature_map, width_feature_map = calculate_conv2d_output_dimensions(self.config.image_size, self.config.image_size, config.encoder_stride, config.patch_size)
-        self.sequence_length  = height_feature_map * width_feature_map
+        self.height_feature_map, self.width_feature_map = calculate_conv2d_output_dimensions(self.config.image_size, self.config.image_size, config.encoder_stride, config.patch_size)
+        self.sequence_length  = self.height_feature_map * self.width_feature_map
 
         self.pos_embed: Optional[nn.Parameter] = None
         if config.positional_embedding == "learned":
@@ -95,25 +95,17 @@ class VitModel(nn.Module):
     def load_config(self):
         pass
 
-    def forward(self, x: Union[Tensor, np.ndarray, List[Image.Image]], attention_heads_idx: List[int]):
+    def forward(self, x: Union[Tensor, np.ndarray, List[Image.Image]], attention_heads_idx: Optional[List[int]] = None):
         y = self.embedded_layer(x) # Size (Batch, sequence_length, embedded_size)
         for block in self.transformer_blocks:
             y = block(y)
-            print(y.shape)
         return y
     
-
+@dataclass
 class ClassificationConfig:
-    def __init__(self,
-                 model: nn.Module,
-                 input_size: int,
-                 num_classes : int,
-                 labels:List[str]
-                 ):
-        self.model = model
-        self.input_size = input_size
-        self.num_classes = num_classes
-        self.labels = labels
+        model : nn.Module
+        input_size : int
+        num_classes : int
 class VitClassificationHead(nn.Module):
     def __init__(self, config: ClassificationConfig):
         self.model = config.model

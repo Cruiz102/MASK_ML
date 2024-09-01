@@ -203,7 +203,11 @@ class TransformerBlock(nn.Module):
         hidden_layers = [config.mlp_hidden_size for _ in range(config.mlp_layers) ]
         self.feed_forward = MLP("relu", config.embedded_size, config.embedded_size,hidden_layers)
     def forward(self, x: Tensor, return_attention_head = False) -> Union[Tensor,Tuple[Tensor,Tensor]]:
-        y, attention_head = x + self.attention(self.norm_layer_1(x), return_attention_head)
+        if return_attention_head:
+            y, attention_head = x + self.attention(self.norm_layer_1(x), return_attention_head)
+        else:
+            y = x + self.attention(self.norm_layer_1(x), return_attention_head)
+
         y = y + self.feed_forward(self.norm_layer_2(y))
         if  return_attention_head:
             return y, attention_head

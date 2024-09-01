@@ -14,5 +14,7 @@ imagenet:
 cifar100:
   download : True
   base_dir: ./
+  num_classes: 100
+  labels: [1,2,3,4]
 
     
