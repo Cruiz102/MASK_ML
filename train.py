@@ -21,6 +21,21 @@ from torch.optim.adamw import AdamW
 
 
 
+def create_unique_experiment_dir(output_dir, experiment_name):
+    # Generate the initial experiment directory path
+    experiment_dir = os.path.join(output_dir, experiment_name)
+    
+    # If the directory already exists, append a number to the experiment name
+    counter = 1
+    while os.path.exists(experiment_dir):
+        experiment_dir = os.path.join(output_dir, f"{experiment_name}_{counter}")
+        counter += 1
+    
+    # Create the final directory
+    os.makedirs(experiment_dir, exist_ok=True)
+    
+    return experiment_dir
+
 
 @hydra.main(version_base=None, config_path="config", config_name="training")
 def run_training(cfg: DictConfig):
@@ -30,9 +45,14 @@ def run_training(cfg: DictConfig):
     dataloader = create_dataloader(cfg)
 
     model_name = cfg['model']['model_name']
-    task = cfg['task']
+    task = cfg.task
     lr = cfg.learning_rate
     epochs = cfg.epochs
+    experiment_name = cfg.experiment_name
+    output_dir = cfg.output_dir
+    os.makedirs(output_dir, exist_ok=True)
+    experiment_dir = create_unique_experiment_dir(output_dir, experiment_name)
+
 
     if task == 'classification':
         dataset_name = cfg['dataset']
@@ -107,7 +127,13 @@ def run_training(cfg: DictConfig):
     criterion = nn.CrossEntropyLoss()
 
 
-    for i in range(cfg.epochs):
+    loss_file = os.path.join(experiment_dir, "cumulative_losses.csv")
+    
+    with open(loss_file, 'w') as f:
+        f.write("epoch,cumulative_loss\n")  # Header for the CSV file
+
+    for i in range(epochs):
+        cumulative_loss = 0.0
         for batch_idx, (inputs, labels) in enumerate(dataloader):
             optimizer.zero_grad()
             y = model(inputs)
@@ -115,7 +141,17 @@ def run_training(cfg: DictConfig):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            print("prediction",y.shape)
+            print("labels", labels.shape)
             print(loss.item())
+
+        model_save_path = os.path.join(experiment_dir, f"model_epoch_{i+1}.pth")
+        torch.save(model.state_dict(), model_save_path)
+        print(f"Model saved at {model_save_path}")
+
+        # Save cumulative loss to the file
+        with open(loss_file, 'a') as f:
+            f.write(f"{i+1},{cumulative_loss}\n")
 
 
 

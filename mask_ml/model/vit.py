@@ -108,16 +108,15 @@ class ClassificationConfig:
         num_classes : int
 class VitClassificationHead(nn.Module):
     def __init__(self, config: ClassificationConfig):
+        super(VitClassificationHead, self).__init__()
         self.model = config.model
         self.config = config
         self.linear_classifier = nn.Linear(config.input_size, config.num_classes)
     def forward(self, x: Union[Tensor, np.ndarray, List[Image.Image]]):
 
-        outputs = self.model()
-        sequence_output = outputs[0]
+        outputs = self.model(x)
         # The 0 index is the [CLS] Token.
-        logits = self.linear_classifier(sequence_output[:, 0, :])
-
+        logits = self.linear_classifier(outputs[:, 0, :])
         probs = F.softmax(logits)
         return probs
 
