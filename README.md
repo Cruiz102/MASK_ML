@@ -1,28 +1,57 @@
-This is the start of a project that will try to experiment with Video Object Segmentation. The idea is to build the Software tools for experimenting with Video Object Segmentation. Ideally we will want to replicate Cutie and SAM2. Create code to have experiments with it. The core idea is not to use only jupyter_notebooks have benchmarks  and Applications for testing different ideas and Ideally create something new! The race begin in here and hopefully it will be a fun experience.
 
-
-First Ideas to implement:
-
-1. The first thing to implement is a simple VIT head  with a segmentation objective. 
-
-2. Create a training script only using Pytorch for training that VIT for a simple segmentation task
-
-3. Create scripts for downloading different segmentation task datasets.
-
-4. Create scripts to visualize results. Ideally The original image with the segmentation.
-
-5. Create Validation testing and test scores.
-
-CORE VALUES of the Project:
-
-This are the things that we have to respect when building this project. First of all it should have as less depdencies as possible. Eveytime time we want to add a new dependency we must really evaluate why we are adding it and if it is completely necessary. This goes with the idea that we must create the application as most self contained as possible.  Dependencies space in memory should be as more reduced as possible. Core dependencies we will need. Pytorch, ideally all the code and implementation will be coded in Pytorch. This means if there is a function that is implemented in OpenCv , numpy, Simpy and Pytorch we will always select the Pytorch version. Ideally all arrays should be Tensors. For Video Visualizations and Transformations OpenCV as a lot functions that will make the work way more easirer. Specially for connecting with Devices and Image annotations. Ideally that should be the only reason we convert things to numpy.
-
-
-Pytorch is already fast!! Later on the project we will try to optimize the models, using Quantization, ONNX RUNTIME. We dont want to make it fast using INNXRUNTIME the Pytorch Inference version should already be fast. But we also want to be able to convert to ONNX.
-
-
-It should be interactive and have library structure. In the same way that SDKs have demos for their different functionalities. We should have scripts that gives information of the different parts of the Pipeline. End to End testing in a apllication
-
-
-Easy Configurations for Training and testing. This means either going for ass pain python setup.py configurations , using hydra-core or dockers pipelines. 
 # MASK_ML
+
+**Mask Segmentation Machine Learning Project**
+
+![Cutie + MobileSAM Demo](assets/cutie_example.gif)
+
+*Example of the Cutie + MobileSAM pipeline available in demos.*
+
+---
+
+## Overview
+
+MASK_ML is a project focused on experimenting with and implementing various video segmentation models. Building on models like SAM, Cutie, and the newly released SAM2, this project aims to create a comprehensive solution for video segmentation tasks. It includes everything from training pipelines to inference systems, all developed with a strong focus on efficiency and performance.
+
+This repository reflects my journey in implementing core ideas from the field into custom training pipelines for video segmentation.
+
+---
+
+## Project Principles
+
+To ensure the project's efficiency and scalability, the following principles guide its development:
+
+1. **Minimize Dependencies**:  
+   Every new dependency must be carefully considered. Only absolutely necessary dependencies should be added to keep the project self-contained and lightweight. The primary dependencies are:
+   - **PyTorch**: All implementations will be built using PyTorch. If a function is available in PyTorch, it will be prioritized over alternatives like OpenCV or NumPy to maintain consistency. Ideally, all data structures will remain as tensors.
+   - **OpenCV**: Used exclusively for video visualizations, transformations, and device connections. Numpy will only be used when necessary for image annotations or device I/O.
+
+2. **Performance Optimization**:  
+   PyTorch is already fast, but further optimization will be explored, such as model quantization and conversions to ONNX. While the PyTorch inference pipeline should be optimized natively, ONNX Runtime support will be added for flexibility in deployment.
+
+3. **Interactive & Modular**:  
+   The project will adopt a library-like structure, with individual scripts demonstrating various parts of the pipeline. Demos will showcase different functionalities for end-to-end testing.
+
+4. **Easy Configuration for Training & Testing**:  
+   To streamline the process, the project will support easy configuration options. This includes:
+   - **Python `setup.py` configurations** for traditional setups.
+   - **Hydra-core** integration for modular and dynamic configuration management.
+   - **Docker pipelines** for containerized and reproducible environments.
+
+---
+
+
+
+## Future Work
+
+More features are under active development! Follow the commit history to stay updated on the latest progress.
+
+---
+
+## Getting Started
+
+Instructions for setting up the project, installing dependencies, and running the training and inference scripts will be provided here soon.
+
+---
+
+Thank you for checking out the MASK_ML project! Contributions and feedback are always welcome.
