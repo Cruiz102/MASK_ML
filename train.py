@@ -43,7 +43,7 @@ def run_training(cfg: DictConfig):
   # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
     dataloader = create_dataloader(cfg)
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = cfg['model']['model_name']
     task = cfg.task
     lr = cfg.learning_rate
@@ -128,17 +128,17 @@ def run_training(cfg: DictConfig):
 
 
     loss_file = os.path.join(experiment_dir, "cumulative_losses.csv")
-    
+    model = model.to(device)
     with open(loss_file, 'w') as f:
         f.write("epoch,cumulative_loss\n")  # Header for the CSV file
-
     for i in range(epochs):
         cumulative_loss = 0.0
         for batch_idx, (inputs, labels) in enumerate(dataloader):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             optimizer.zero_grad()
             y = model(inputs)
             loss = criterion(y, labels)
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             print("prediction",y.shape)

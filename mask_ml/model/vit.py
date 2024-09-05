@@ -70,7 +70,7 @@ class VITPatchEncoder(nn.Module):
 
         embeddings = self.projection(images).flatten(2).transpose(1, 2)
         if self.config.positional_embedding:
-            embeddings += self.pos_embed
+            embeddings += self.pos_embed.to(embeddings.device)
         # add the [CLS] token to the embedded patch tokens
         cls_tokens = self.cls_token.expand(B, -1, -1)
         embeddings = torch.cat((cls_tokens, embeddings), dim=1)
