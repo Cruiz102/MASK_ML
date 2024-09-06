@@ -3,10 +3,13 @@ defaults:
   - datasets: classification
 
 output_dir: ./runs
+experiment_name: cifar100
 dataset: cifar100
 task: classification
-batch_size: 8
+batch_size: 32
 learning_rate: 0.0005
 image_size: 256
 epochs: 11
-attention_heads: [1]
+saved_weight_path: ""
+visualization:
+  attention_heads: [1]

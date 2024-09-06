@@ -5,19 +5,19 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from mask_ml.utils.datasets import create_dataloader
 from typing import List
-from mask_ml.model.vit import ViTConfig, VitModel
+from mask_ml.model.vit import ViTConfig, VitModel, ClassificationConfig, VitClassificationHead
 from mask_ml.model.mask_decoder import MaskDecoderConfig
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 from mask_ml.model.metrics import iou_score
 import os
 from tqdm import tqdm
-import numpy as np
 import time
 import csv
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
+from torch.nn.functional import one_hot
 
 def validation_test(output_path: str, model: nn.Module, dataloader: DataLoader, task: str, attentions_heads: list):
     model.eval()  # Set the model to evaluation mode
@@ -46,7 +46,7 @@ def validation_test(output_path: str, model: nn.Module, dataloader: DataLoader, 
                 is_encoder_transformer = False
                 is_decoder_transformer = False
             
-            if isinstance(model, VitModel) or is_encoder_transformer:
+            if isinstance(model, VitModel) or is_encoder_transformer and False:
                 outputs = model(imgs.float(), attention_heads_idx=attentions_heads)
             else:
                 outputs = model(imgs.float())  # For non-transformer models
@@ -56,6 +56,8 @@ def validation_test(output_path: str, model: nn.Module, dataloader: DataLoader, 
                 all_true_labels.extend(label.cpu().numpy())
                 all_predicted_labels.extend(predicted.cpu().numpy())
                 # Assuming loss is calculated elsewhere or handled differently
+                print(predicted.shape, label.shape)
+                print("hola")
                 metric_score = (predicted == label).float().mean().item()
                 total_score += metric_score
 
@@ -101,10 +103,13 @@ def validation_test(output_path: str, model: nn.Module, dataloader: DataLoader, 
 def run_evaluation(cfg: DictConfig):
     # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
-    dataloader = create_dataloader(cfg)
+    dataloader = create_dataloader(cfg, train=False)
 
     model_name = cfg['model']['model_name']
     task = cfg['task']
+    if task == 'classification':
+        dataset_name = cfg['dataset']
+        num_classes = cfg['datasets'][dataset_name]['num_classes']
 
     if model_name == 'vit_classification':
         model_config = ViTConfig(
@@ -121,9 +126,15 @@ def run_evaluation(cfg: DictConfig):
             mlp_layers=cfg.model.mlp_layers,
             activation_function= cfg.model.activation_function,
             dropout_prob=cfg.model.dropout_prob)
-        
 
-        model = VitModel(model_config)
+        vit = VitModel(model_config)
+
+        classification_config = ClassificationConfig(
+            model=vit,
+            input_size=cfg.model.embedded_size,
+            num_classes=num_classes,
+        )
+        model = VitClassificationHead(classification_config)
         
     elif model_name == "SegmentationAutoEncoder":
         encoder_config = ViTConfig(

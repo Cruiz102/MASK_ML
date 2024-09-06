@@ -22,7 +22,7 @@ import torchvision
 # Assuming you have these dataset classes defined somewhere
 # from your_datasets_module import CocoSegmentationDataset, SA1BImageDataset
 
-def create_dataloader(cfg: DictConfig) -> DataLoader:
+def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
     dataset_name = cfg['dataset']
     
     # Get the paths from the config
@@ -34,24 +34,27 @@ def create_dataloader(cfg: DictConfig) -> DataLoader:
     
     # Select the appropriate dataset
     if dataset_name == "coco":
-        dataset = CocoSegmentationDataset("annotation_dir", image_dir, download=download)
+        dataset_train = CocoSegmentationDataset("annotation_dir", image_dir, download=download)
     elif dataset_name == "sa1b":
-        dataset = SA1BImageDataset(image_dir, download=download)
+        dataset_train = SA1BImageDataset(image_dir, download=download)
     elif dataset_name == 'cifar100':
         # Define the transformation to convert images to tensors and normalize
         transform = transforms.Compose([
             transforms.ToTensor(),  # Convert PIL Image to Tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            transforms.Resize((256, 256)),  # Resize the image to 64x64 pixels
+            transforms.Resize((image_size,image_size)),  # Resize the image to 64x64 pixels
         ])
-        dataset = torchvision.datasets.CIFAR100(image_dir, download=True, transform= transform)
+        dataset_train = torchvision.datasets.CIFAR100(image_dir, download=True, transform= transform)
+        dataset_test = torchvision.datasets.CIFAR100(image_dir, download=True,train=False,  transform= transform)
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
     
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=shuffle)
+    dataloader_test = DataLoader(dataset=dataset_test, batch_size=batch_size, shuffle=shuffle)
     print(dataset_name, "This is the dataset name")
-
-    return dataloader
+    if train==False:
+        return dataloader_test
+    return dataloader_train, dataloader_test
 
 
 class CocoSegmentationDataset(Dataset):

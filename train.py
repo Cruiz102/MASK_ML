@@ -18,8 +18,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.adamw import AdamW
-
-
+from tqdm import tqdm
+from eval import validation_test
 
 def create_unique_experiment_dir(output_dir, experiment_name):
     # Generate the initial experiment directory path
@@ -42,7 +42,7 @@ def run_training(cfg: DictConfig):
 
   # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
-    dataloader = create_dataloader(cfg)
+    dataloader_train, dataloader_test = create_dataloader(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = cfg['model']['model_name']
     task = cfg.task
@@ -118,11 +118,11 @@ def run_training(cfg: DictConfig):
 
         model = SegmentationAutoEncoder(model_config)
 
-            # Set up optimizer and learning rate scheduler
-    optimizer = AdamW(model.parameters(),lr=lr)
+    # if cfg.saved_weights_path:
+    #     model.load_state_dict(torch.load(cfg.saved_weights_path))
+    #     print(f"Loaded weights from {cfg.saved_weights_path}")
 
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=lr_scheduler[0])
-
+    optimizer = AdamW(model.parameters(), lr=lr)
     # Loss function
     criterion = nn.CrossEntropyLoss()
 
@@ -131,29 +131,35 @@ def run_training(cfg: DictConfig):
     model = model.to(device)
     with open(loss_file, 'w') as f:
         f.write("epoch,cumulative_loss\n")  # Header for the CSV file
-    for i in range(epochs):
-        cumulative_loss = 0.0
-        for batch_idx, (inputs, labels) in enumerate(dataloader):
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-            optimizer.zero_grad()
-            y = model(inputs)
-            loss = criterion(y, labels)
-            loss.backward()
-            optimizer.step()
-            print("prediction",y.shape)
-            print("labels", labels.shape)
-            print(loss.item())
-
-        model_save_path = os.path.join(experiment_dir, f"model_epoch_{i+1}.pth")
-        torch.save(model.state_dict(), model_save_path)
-        print(f"Model saved at {model_save_path}")
-
-        # Save cumulative loss to the file
-        with open(loss_file, 'a') as f:
-            f.write(f"{i+1},{cumulative_loss}\n")
+    try:
+        for i in range(epochs):
+            cumulative_loss = 0.0
+            for batch_idx, (inputs, labels) in tqdm(enumerate(dataloader_train), total=len(dataloader_train), desc=f"Epoch {i+1}/{epochs}"):
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+                optimizer.zero_grad()
+                y = model(inputs)
+                loss = criterion(y, labels)
+                loss.backward()
+                optimizer.step()
+                cumulative_loss += loss.item()
+            
+            model_save_path = os.path.join(experiment_dir, f"model_epoch_{i+1}.pth")
+            torch.save(model.state_dict(), model_save_path)
+            print(f"Model saved at {model_save_path}")
 
 
+            validation_test(output_path=experiment_dir, model= model, dataloader=dataloader_test,task=task, attentions_heads=[1])
+
+            # Save cumulative loss to the file
+            with open(loss_file, 'a') as f:
+                f.write(f"{i+1},{cumulative_loss}\n")
+
+    except KeyboardInterrupt:
+        print("Training interrupted. Saving latest model weights...")
+        latest_model_save_path = os.path.join(experiment_dir, "latest_model_interrupted.pth")
+        torch.save(model.state_dict(), latest_model_save_path)
+        print(f"Latest model saved at {latest_model_save_path}")
 
 if __name__ == "__main__":
     run_training()
