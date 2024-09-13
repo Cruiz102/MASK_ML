@@ -1,4 +1,3 @@
-
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
@@ -6,41 +5,37 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from mask_ml.utils.datasets import create_dataloader
 from typing import List
-from mask_ml.model.vit import ViTConfig, VitModel,ClassificationConfig, VitClassificationHead
+from mask_ml.model.vit import ViTConfig, VitModel, ClassificationConfig, VitClassificationHead
 from mask_ml.model.mask_decoder import MaskDecoderConfig
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
+from mask_ml.model.mask_decoder import MLP
 import os
-import tqdm
-import numpy as np
-import time
-import csv
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.optim.adamw import AdamW
+import matplotlib.pyplot as plt  # Import matplotlib for plotting
 from tqdm import tqdm
+from torch.optim.adamw import AdamW
 from eval import validation_test
 
 def create_unique_experiment_dir(output_dir, experiment_name):
-    # Generate the initial experiment directory path
     experiment_dir = os.path.join(output_dir, experiment_name)
-    
-    # If the directory already exists, append a number to the experiment name
     counter = 1
     while os.path.exists(experiment_dir):
         experiment_dir = os.path.join(output_dir, f"{experiment_name}_{counter}")
         counter += 1
-    
-    # Create the final directory
     os.makedirs(experiment_dir, exist_ok=True)
-    
     return experiment_dir
 
+def plot_loss_per_step(step_losses, output_path):
+    plt.figure()
+    plt.plot(range(1, len(step_losses) + 1), step_losses, marker='o', markersize=2)
+    plt.title('Loss per Step (Batch)')
+    plt.xlabel('Step (Batch)')
+    plt.ylabel('Loss')
+    plt.grid(True)
+    plt.savefig(os.path.join(output_path, 'step_loss_plot.png'))
+    plt.close()
 
 @hydra.main(version_base=None, config_path="config", config_name="training")
 def run_training(cfg: DictConfig):
-
-  # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
     dataloader_train, dataloader_test = create_dataloader(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,11 +48,9 @@ def run_training(cfg: DictConfig):
     os.makedirs(output_dir, exist_ok=True)
     experiment_dir = create_unique_experiment_dir(output_dir, experiment_name)
 
-
     if task == 'classification':
         dataset_name = cfg['dataset']
         num_classes = cfg['datasets'][dataset_name]['num_classes']
-        
 
     if model_name == 'vit_classification':
         model_config = ViTConfig(
@@ -72,7 +65,7 @@ def run_training(cfg: DictConfig):
             attention_heads=cfg.model.attention_heads,
             mlp_hidden_size=cfg.model.mlp_hidden_size,
             mlp_layers=cfg.model.mlp_layers,
-            activation_function= cfg.model.activation_function,
+            activation_function=cfg.model.activation_function,
             dropout_prob=cfg.model.dropout_prob)
 
         vit = VitModel(model_config)
@@ -83,7 +76,7 @@ def run_training(cfg: DictConfig):
             num_classes=num_classes,
         )
         model = VitClassificationHead(classification_config)
-        
+
     elif model_name == "SegmentationAutoEncoder":
         encoder_config = ViTConfig(
             transformer_blocks=cfg.model.encoder.transformer_blocks,
@@ -97,44 +90,40 @@ def run_training(cfg: DictConfig):
             attention_heads=cfg.model.encoder.attention_heads,
             mlp_hidden_size=cfg.model.encoder.mlp_hidden_size,
             mlp_layers=cfg.model.encoder.mlp_layers,
-            activation_function= cfg.model.encoder.activation_function,
+            activation_function=cfg.model.encoder.activation_function,
             dropout_prob=cfg.model.encoder.dropout_prob)
-    
+
         decoder_config = MaskDecoderConfig(
             transformer_blocks=cfg.model.decoder.transformer_blocks,
             num_multimask_outputs=cfg.model.decoder.num_multimask_outputs,
             iou_mlp_layer_depth=cfg.model.decoder.iou_mlp_depth,
             mlp_hidden_size=cfg.model.encoder.mlp_hidden_size,
-            embedded_size= cfg.model.decoder.embedded_size,
+            embedded_size=cfg.model.decoder.embedded_size,
             attention_heads=cfg.model.decoder.attention_heads,
             mlp_layers=cfg.model.encoder.transformer_mlp_layers,
-            activation_function= cfg.model.encoder.activation_function,
+            activation_function=cfg.model.encoder.activation_function,
             dropout_prob=cfg.model.encoder.dropout_prob)
 
         model_config = SegmentationAutoEncoderConfig(
             encoder_config=encoder_config,
-            decoder_config= decoder_config
+            decoder_config=decoder_config
         )
-
         model = SegmentationAutoEncoder(model_config)
 
-    # if cfg.saved_weights_path:
-    #     model.load_state_dict(torch.load(cfg.saved_weights_path))
-    #     print(f"Loaded weights from {cfg.saved_weights_path}")
-
     optimizer = AdamW(model.parameters(), lr=lr)
-    # Loss function
     criterion = nn.CrossEntropyLoss()
 
-
-    loss_file = os.path.join(experiment_dir, "cumulative_losses.csv")
+    loss_file = os.path.join(experiment_dir, "step_losses.csv")
     model = model.to(device)
+
+    step_losses = []  # To store loss for each step (batch)
+
     with open(loss_file, 'w') as f:
-        f.write("epoch,cumulative_loss\n")  # Header for the CSV file
+        f.write("step,loss\n")  # Header for the CSV file
     try:
-        for i in range(epochs):
-            cumulative_loss = 0.0
-            for batch_idx, (inputs, labels) in tqdm(enumerate(dataloader_train), total=len(dataloader_train), desc=f"Epoch {i+1}/{epochs}"):
+        step_count = 1
+        for epoch in range(epochs):
+            for batch_idx, (inputs, labels) in tqdm(enumerate(dataloader_train), total=len(dataloader_train), desc=f"Epoch {epoch+1}/{epochs}"):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 optimizer.zero_grad()
@@ -142,24 +131,29 @@ def run_training(cfg: DictConfig):
                 loss = criterion(y, labels)
                 loss.backward()
                 optimizer.step()
-                cumulative_loss += loss.item()
-            
-            model_save_path = os.path.join(experiment_dir, f"model_epoch_{i+1}.pth")
+
+                step_losses.append(loss.item())  # Log the loss per step
+
+                # Save step loss to the file
+                with open(loss_file, 'a') as f:
+                    f.write(f"{step_count},{loss.item()}\n")
+                
+                step_count += 1
+
+            model_save_path = os.path.join(experiment_dir, f"model_epoch_{epoch+1}.pth")
             torch.save(model.state_dict(), model_save_path)
             print(f"Model saved at {model_save_path}")
 
-
-            validation_test(output_path=experiment_dir, model= model, dataloader=dataloader_test,task=task, attentions_heads=[1])
-
-            # Save cumulative loss to the file
-            with open(loss_file, 'a') as f:
-                f.write(f"{i+1},{cumulative_loss}\n")
+            validation_test(output_path=experiment_dir, model=model, dataloader=dataloader_test, task=task, attentions_heads=[1])
 
     except KeyboardInterrupt:
         print("Training interrupted. Saving latest model weights...")
         latest_model_save_path = os.path.join(experiment_dir, "latest_model_interrupted.pth")
         torch.save(model.state_dict(), latest_model_save_path)
         print(f"Latest model saved at {latest_model_save_path}")
+
+    # Plot the loss per step
+    plot_loss_per_step(step_losses, experiment_dir)
 
 if __name__ == "__main__":
     run_training()
