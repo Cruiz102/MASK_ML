@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from mask_ml.utils.datasets import create_dataloader
 from typing import List
-from mask_ml.model.vit import ViTConfig, VitModel, ClassificationConfig, VitClassificationHead
+from mask_ml.model.vit import ViTConfig, VitModel, VitClassificationHead
 from mask_ml.model.mask_decoder import MaskDecoderConfig
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 from mask_ml.model.metrics import iou_score
@@ -28,30 +28,31 @@ from sklearn.metrics import confusion_matrix, f1_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, task: str, attentions_heads: list):
+def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.utils.data.DataLoader, task: str, attentions_heads: list, log: bool = True) -> float:
     model.eval()  # Set the model to evaluation mode
     total_score = 0.0
     num_batches = len(dataloader)
-    csv_file = os.path.join(output_path, "validation_results.csv")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
     if task == 'classification':
         all_true_labels = []
         all_predicted_labels = []
-    
-    # Create the CSV file and write the header
-    with open(csv_file, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(['Batch Index', 'Loss/Metric', 'Time (seconds)', 'Output Shape'])
+
+    if log:
+        # Prepare for logging if required
+        csv_file = os.path.join(output_path, "validation_results.csv")
+        os.makedirs(output_path, exist_ok=True)
+        with open(csv_file, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Batch Index', 'Loss/Metric', 'Time (seconds)', 'Output Shape'])
 
     with torch.no_grad():
         for i, (imgs, label) in enumerate(tqdm(dataloader, desc="Evaluating", leave=False)):
-            # Move images and labels to the correct device
             imgs = imgs.to(device)
             label = label.to(device)
 
-            start_time = time.time()  # Start timing
+            start_time = time.time()
 
             # Check if the model is a SegmentationAutoEncoder or VitModel
             if isinstance(model, SegmentationAutoEncoder):
@@ -60,7 +61,7 @@ def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.
             else:
                 is_encoder_transformer = False
                 is_decoder_transformer = False
-            
+
             if isinstance(model, VitModel) or (is_encoder_transformer and False):
                 outputs = model(imgs.float(), attention_heads_idx=attentions_heads)
             else:
@@ -77,59 +78,43 @@ def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.
                 metric_score = iou_score(outputs, label).mean().item()  # Assuming iou_score is implemented
                 total_score += metric_score
 
-            end_time = time.time()  # End timing
+            end_time = time.time()
             batch_time = end_time - start_time
 
-            print(f"Batch {i+1}/{num_batches}")
-            print(f"Output shape: {outputs.shape}")
-            print(f"Batch metric: {metric_score:.4f}")
-            print(f"Batch processing time: {batch_time:.4f} seconds")
-            print("-" * 40)
-
-            # Write results to CSV
-            with open(csv_file, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow([i + 1, metric_score, batch_time, list(outputs.shape)])
+            # Log the results if logging is enabled
+            if log:
+                with open(csv_file, mode='a', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow([i + 1, metric_score, batch_time, list(outputs.shape)])
 
         avg_score = total_score / num_batches
         print(f"Validation complete. Average metric: {avg_score:.4f}")
 
         if task == 'classification':
-            # Confusion Matrix
             conf_matrix = confusion_matrix(all_true_labels, all_predicted_labels)
-            print("Confusion Matrix:")
-            print(conf_matrix)
+            if log:
+                # Save confusion matrix as a CSV
+                conf_matrix_file = os.path.join(output_path, "confusion_matrix.csv")
+                with open(conf_matrix_file, mode='w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(["True Label", "Predicted Label", "Count"])
+                    for true_label in range(conf_matrix.shape[0]):
+                        for pred_label in range(conf_matrix.shape[1]):
+                            writer.writerow([true_label, pred_label, conf_matrix[true_label][pred_label]])
 
-            # F1 Score Calculation (Macro, Micro, and Weighted)
-            f1_macro = f1_score(all_true_labels, all_predicted_labels, average='macro')
-            f1_micro = f1_score(all_true_labels, all_predicted_labels, average='micro')
-            f1_weighted = f1_score(all_true_labels, all_predicted_labels, average='weighted')
-            print(f"F1 Score (Macro): {f1_macro:.4f}")
-            print(f"F1 Score (Micro): {f1_micro:.4f}")
-            print(f"F1 Score (Weighted): {f1_weighted:.4f}")
-
-            # Save confusion matrix as a CSV
-            conf_matrix_file = os.path.join(output_path, "confusion_matrix.csv")
-            with open(conf_matrix_file, mode='w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(["True Label", "Predicted Label", "Count"])
-                for true_label in range(conf_matrix.shape[0]):
-                    for pred_label in range(conf_matrix.shape[1]):
-                        writer.writerow([true_label, pred_label, conf_matrix[true_label][pred_label]])
-
-            # Plot confusion matrix and save as image
-            conf_matrix_img_path = os.path.join(output_path, "confusion_matrix.png")
-            plt.figure(figsize=(10, 7))
-            sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", cbar=False, xticklabels=True, yticklabels=True)
-            plt.xlabel("Predicted Label")
-            plt.ylabel("True Label")
-            plt.title("Confusion Matrix")
-            plt.savefig(conf_matrix_img_path)
-            plt.close()  # Close the plot to avoid display
-
-            print(f"Confusion matrix image saved at {conf_matrix_img_path}")
+                # Plot confusion matrix and save as image
+                conf_matrix_img_path = os.path.join(output_path, "confusion_matrix.png")
+                plt.figure(figsize=(10, 7))
+                sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", cbar=False, xticklabels=True, yticklabels=True)
+                plt.xlabel("Predicted Label")
+                plt.ylabel("True Label")
+                plt.title("Confusion Matrix")
+                plt.savefig(conf_matrix_img_path)
+                plt.close()
 
         print(f"Validation complete. Average score: {avg_score:.4f}")
+
+    return avg_score
 
 @hydra.main(version_base=None, config_path="config", config_name="evaluation")
 def run_evaluation(cfg: DictConfig):

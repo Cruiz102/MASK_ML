@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from mask_ml.utils.datasets import create_dataloader
 from typing import List
-from mask_ml.model.vit import ViTConfig, VitModel, ClassificationConfig, VitClassificationHead
+from mask_ml.model.vit import ViTConfig, VitModel, VitClassificationConfig, VitClassificationHead
 from mask_ml.model.mask_decoder import MaskDecoderConfig
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 from mask_ml.model.mask_decoder import MLP
@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt  # Import matplotlib for plotting
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
-
+from hydra.utils import instantiate
 def create_unique_experiment_dir(output_dir, experiment_name):
     experiment_dir = os.path.join(output_dir, experiment_name)
     counter = 1
@@ -33,13 +33,13 @@ def plot_loss_per_step(step_losses, output_path):
     plt.grid(True)
     plt.savefig(os.path.join(output_path, 'step_loss_plot.png'))
     plt.close()
-
 @hydra.main(version_base=None, config_path="config", config_name="training")
-def run_training(cfg: DictConfig):
+def run_training(cfg: DictConfig) -> float:
     print(OmegaConf.to_yaml(cfg))
+
     dataloader_train, dataloader_test = create_dataloader(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_name = cfg['model']['model_name']
+    
     task = cfg.task
     lr = cfg.learning_rate
     epochs = cfg.epochs
@@ -47,68 +47,29 @@ def run_training(cfg: DictConfig):
     output_dir = cfg.output_dir
     os.makedirs(output_dir, exist_ok=True)
     experiment_dir = create_unique_experiment_dir(output_dir, experiment_name)
-
+    
+    # Mapping task to the correct model name
     if task == 'classification':
-        dataset_name = cfg['dataset']
-        num_classes = cfg['datasets'][dataset_name]['num_classes']
+        model_name = 'vit_classification'
+    elif task == 'segmentation':
+        model_name = 'segmentation_auto_encoder'
+    else:
+        raise ValueError(f"Unknown task: {task}")
+    
+    # Instantiate the correct model based on the task
+    model_config = instantiate(cfg.model[model_name])
 
-    if model_name == 'vit_classification':
-        model_config = ViTConfig(
-            transformer_blocks=cfg.model.transformer_blocks,
-            image_size=cfg.model.image_size,
-            patch_size=cfg.model.patch_size,
-            num_channels=cfg.model.num_channels,
-            encoder_stride=cfg.model.encoder_stride,
-            use_mask_token=False,
-            positional_embedding=cfg.model.positional_embedding,
-            embedded_size=cfg.model.embedded_size,
-            attention_heads=cfg.model.attention_heads,
-            mlp_hidden_size=cfg.model.mlp_hidden_size,
-            mlp_layers=cfg.model.mlp_layers,
-            activation_function=cfg.model.activation_function,
-            dropout_prob=cfg.model.dropout_prob)
+    if isinstance(model_config, VitClassificationConfig):
+        vit = VitModel(model_config.model)
+        model = VitClassificationHead(model_config)
 
-        vit = VitModel(model_config)
-
-        classification_config = ClassificationConfig(
-            model=vit,
-            input_size=cfg.model.embedded_size,
-            num_classes=num_classes,
-        )
-        model = VitClassificationHead(classification_config)
-
-    elif model_name == "SegmentationAutoEncoder":
-        encoder_config = ViTConfig(
-            transformer_blocks=cfg.model.encoder.transformer_blocks,
-            image_size=cfg.model.encoder.image_size,
-            patch_size=cfg.model.encoder.patch_size,
-            num_channels=cfg.model.encoder.num_channels,
-            encoder_stride=cfg.model.encoder.encoder_stride,
-            use_mask_token=True,
-            positional_embedding=cfg.model.encoder.positional_embedding,
-            embedded_size=cfg.model.encoder.embedded_size,
-            attention_heads=cfg.model.encoder.attention_heads,
-            mlp_hidden_size=cfg.model.encoder.mlp_hidden_size,
-            mlp_layers=cfg.model.encoder.mlp_layers,
-            activation_function=cfg.model.encoder.activation_function,
-            dropout_prob=cfg.model.encoder.dropout_prob)
-
-        decoder_config = MaskDecoderConfig(
-            transformer_blocks=cfg.model.decoder.transformer_blocks,
-            num_multimask_outputs=cfg.model.decoder.num_multimask_outputs,
-            iou_mlp_layer_depth=cfg.model.decoder.iou_mlp_depth,
-            mlp_hidden_size=cfg.model.encoder.mlp_hidden_size,
-            embedded_size=cfg.model.decoder.embedded_size,
-            attention_heads=cfg.model.decoder.attention_heads,
-            mlp_layers=cfg.model.encoder.transformer_mlp_layers,
-            activation_function=cfg.model.encoder.activation_function,
-            dropout_prob=cfg.model.encoder.dropout_prob)
-
-        model_config = SegmentationAutoEncoderConfig(
-            encoder_config=encoder_config,
-            decoder_config=decoder_config
-        )
+    elif isinstance(model_config, SegmentationAutoEncoderConfig):
         model = SegmentationAutoEncoder(model_config)
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate)
+    criterion = torch.nn.CrossEntropyLoss()
+
+    model = model.to(device)
 
     optimizer = AdamW(model.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
