@@ -60,7 +60,6 @@ def run_training(cfg: DictConfig) -> float:
     model_config = instantiate(cfg.model[model_name])
 
     if isinstance(model_config, VitClassificationConfig):
-        vit = VitModel(model_config.model)
         model = VitClassificationHead(model_config)
 
     elif isinstance(model_config, SegmentationAutoEncoderConfig):

@@ -18,21 +18,21 @@ model:
   vit_classification:
     _target_: "mask_ml.model.vit.VitClassificationConfig"  # Replace with the actual path
     num_classes: 1000
-    input_size: 224
-    model:  # Fixed indentation here
+    input_size: 768
+    model_config:  # Fixed indentation here
       transformer_blocks: 12
-      image_size: 224
+      image_size: 256
       patch_size: 16
       num_channels: 3
       encoder_stride: 4
-      positional_embedding: "sine"
+      positional_embedding: "sinusoidal"
       embedded_size: 768
       attention_heads: 12
       mlp_hidden_size: 3072
       mlp_layers: 2
       activation_function: "relu"
       dropout_prob: 0.1
-
+      use_mask_token: False
   segmentation_auto_encoder:
     _target_: "mask_ml.model.segmentation_auto_encoder.SegmentationAutoEncoderConfig"  # Replace with the actual path
     encoder_config:

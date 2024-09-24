@@ -103,13 +103,13 @@ class VitModel(nn.Module):
     
 @dataclass
 class VitClassificationConfig:
-        modelConfig : nn.Module
+        model_config : ViTConfig
         input_size : int
         num_classes : int
 class VitClassificationHead(nn.Module):
     def __init__(self, config: VitClassificationConfig):
         super(VitClassificationHead, self).__init__()
-        self.model = VitModel(config.modelConfig)
+        self.model = VitModel(config.model_config)
         self.config = config
         self.linear_classifier = nn.Linear(config.input_size, config.num_classes)
     def forward(self, x: Union[Tensor, np.ndarray, List[Image.Image]]):
