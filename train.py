@@ -8,6 +8,7 @@ from typing import List
 from mask_ml.model.vit import ViTConfig, VitModel, VitClassificationConfig, VitClassificationHead
 from mask_ml.model.mask_decoder import MaskDecoderConfig
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
+from mask_ml.model.mlp import MLPClassification, MLPClassificationConfig
 from mask_ml.model.mask_decoder import MLP
 import os
 import matplotlib.pyplot as plt  # Import matplotlib for plotting
@@ -49,8 +50,10 @@ def run_training(cfg: DictConfig) -> float:
     experiment_dir = create_unique_experiment_dir(output_dir, experiment_name)
     
     # Mapping task to the correct model name
-    if task == 'classification':
+    if task == 'vit_classification':
         model_name = 'vit_classification'
+    elif task == 'mlp_classification':
+        model_name = 'mlp_classification'
     elif task == 'segmentation':
         model_name = 'segmentation_auto_encoder'
     else:
@@ -58,6 +61,9 @@ def run_training(cfg: DictConfig) -> float:
     
     # Instantiate the correct model based on the task
     model_config = instantiate(cfg.model[model_name])
+
+    if isinstance(model_config, MLPClassificationConfig):
+        model = MLPClassification(model_config)
 
     if isinstance(model_config, VitClassificationConfig):
         model = VitClassificationHead(model_config)
@@ -74,10 +80,13 @@ def run_training(cfg: DictConfig) -> float:
     criterion = nn.CrossEntropyLoss()
 
     loss_file = os.path.join(experiment_dir, "step_losses.csv")
+    training_data_file = os.path.join(experiment_dir, 'training_data.txt')
     model = model.to(device)
 
     step_losses = []  # To store loss for each step (batch)
 
+    with open(training_data_file, 'w') as f:
+        f.write(OmegaConf.to_yaml(cfg))
     with open(loss_file, 'w') as f:
         f.write("step,loss\n")  # Header for the CSV file
     try:

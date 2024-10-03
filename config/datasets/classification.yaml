@@ -17,4 +17,8 @@ cifar100:
   num_classes: 100
   labels: [1,2,3,4]
 
-    
+mnist:
+  download: True
+  base_dir: ./
+  num_classes: 10
+  labels: [1,2,3,4]    

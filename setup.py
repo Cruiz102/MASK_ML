@@ -5,6 +5,7 @@ REQUIRED_PACKAGES = [
     'opencv-python==4.10.0.84',
     'torch==2.4.0',
     'torchvision==0.19.0',
+    'hydra-optuna-sweeper'
 ]
 setup(
     name="ml_mask",

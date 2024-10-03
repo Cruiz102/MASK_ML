@@ -46,6 +46,16 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
         ])
         dataset_train = torchvision.datasets.CIFAR100(image_dir, download=True, transform= transform)
         dataset_test = torchvision.datasets.CIFAR100(image_dir, download=True,train=False,  transform= transform)
+
+    elif dataset_name == 'mnist':
+        transform = transforms.Compose([
+            transforms.ToTensor(),  
+            transforms.Normalize(mean=[0.485], std=[0.229]),
+            transforms.Resize((image_size,image_size)),  
+        ])
+        dataset_train = torchvision.datasets.MNIST(image_dir, train=True, download=True, transform=transform)
+        dataset_test = datasets.MNIST(image_dir, train=False,transform=transform)
+
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
     

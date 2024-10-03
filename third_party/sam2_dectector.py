@@ -4,9 +4,8 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+from typing import Union,List
 from PIL import Image
-
-
 from sam2.build_sam import build_sam2_video_predictor
 class Sam2Predictor:
     def __init__(self):
@@ -26,21 +25,20 @@ class Sam2Predictor:
         sam2_checkpoint = "/home/cesar/Projects/MASK_ML/sam2_hiera_large.pt"
         model_cfg = "sam2_hiera_l.yaml"
 
-        predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
+        self.predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=device)
 
         self.masks = torch.Tensor()
         self.objects_names = []
         self.objects_images = []
         self.last_mask = torch.zeros(1).cuda()
         super().__init__()
-    def predict_mask(self, img):
+    def predict_mask(self, img: Union[np.ndarray]):
         img_tensors = torch.from_numpy(img).cuda().float()
-        
         img_tensors = img_tensors / 255.0
         img_tensors =img_tensors.permute(2, 0, 1) 
         # print(img_tensors.dtype, "img")
-        output_probs = self.processor.step(img_tensors)
-        masks = self.processor.output_prob_to_mask(output_probs)
+        output_probs = self.predictor.step(img_tensors)
+        masks = self.predictor.output_prob_to_mask(output_probs)
         masks = self._create_mask_channels(masks)
         # print("output", output_probs)
         # print(output_probs.device, self.last_mask.device)
@@ -48,4 +46,11 @@ class Sam2Predictor:
             print("Something Wrong in here>: Same Image??")
         self.last_mask = output_probs
         return masks
-    
+if __name__ == '__main__':
+    from PIL import Image
+    import numpy as np
+    predictor = Sam2Predictor()
+    image = Image.open('assets/000079.jpg')    
+    image.show()
+    img = np.asarray(image)
+    predictor.predict_mask(img)

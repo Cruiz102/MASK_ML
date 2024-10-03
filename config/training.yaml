@@ -13,8 +13,28 @@ hydra:
       mlp_hidden_size: range(1024, 4096)  # Search space for MLP hidden size
       dropout_prob: interval(0.0, 0.5)  # Search space for dropout probability
 
+
+output_dir: ./runs
+experiment_name: mnisttry
+dataset: mnist
+task: mlp_classification
+batch_size: 4
+learning_rate: 0.00002
+image_size: 28
+epochs: 1
+saved_weight_path: ""
+visualization:
+  attention_heads: [1]
 model:
-  task: classification  # or 'segmentation'
+  task: mlp_classification  # or 'segmentation' or mlp_classification
+
+  mlp_classification:
+    _target_: "mask_ml.model.mlp.MLPClassificationConfig"  
+    num_classes: 10
+    input_size: 784
+    hidden_size : 100
+    num_layers: 5
+    sigmoid_output: True
   vit_classification:
     _target_: "mask_ml.model.vit.VitClassificationConfig"  # Replace with the actual path
     num_classes: 1000
@@ -53,14 +73,3 @@ model:
       num_multimask_outputs: 3
       iou_mlp_depth: 2
 
-output_dir: ./runs
-experiment_name: cifar100
-dataset: cifar100
-task: classification
-batch_size: 32
-learning_rate: 0.000002
-image_size: 256
-epochs: 11
-saved_weight_path: ""
-visualization:
-  attention_heads: [1]

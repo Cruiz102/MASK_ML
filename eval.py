@@ -35,7 +35,7 @@ def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    if task == 'classification':
+    if task == 'mlp_classification':
         all_true_labels = []
         all_predicted_labels = []
 
@@ -67,7 +67,7 @@ def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.
             else:
                 outputs = model(imgs.float())  # For non-transformer models
 
-            if task == 'classification':
+            if task == 'mlp_classification':
                 _, predicted = torch.max(outputs, 1)
                 all_true_labels.extend(label.cpu().numpy())
                 all_predicted_labels.extend(predicted.cpu().numpy())
@@ -146,7 +146,7 @@ def run_evaluation(cfg: DictConfig):
 
         vit = VitModel(model_config)
 
-        classification_config = ClassificationConfig(
+        classification_config = VitClassificationHead(
             model=vit,
             input_size=cfg.model.embedded_size,
             num_classes=num_classes,
