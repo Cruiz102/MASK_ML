@@ -23,10 +23,9 @@ import torchvision
 # from your_datasets_module import CocoSegmentationDataset, SA1BImageDataset
 
 def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
-    dataset_name = cfg['dataset']
-    
-    # Get the paths from the config
-    image_dir = cfg['datasets'][dataset_name]['base_dir']
+    dataset = cfg['datasets']
+    dataset_name = dataset['name']
+    image_dir = cfg['datasets']['base_dir']
     batch_size = cfg['batch_size']
     shuffle = cfg.get('shuffle', False)
     download = cfg.get('download', False)
@@ -37,7 +36,7 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
         dataset_train = CocoSegmentationDataset("annotation_dir", image_dir, download=download)
     elif dataset_name == "sa1b":
         dataset_train = SA1BImageDataset(image_dir, download=download)
-    elif dataset_name == 'cifar100':
+    elif dataset_name == 'cifar100_classification':
         # Define the transformation to convert images to tensors and normalize
         transform = transforms.Compose([
             transforms.ToTensor(),  # Convert PIL Image to Tensor
@@ -47,7 +46,7 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
         dataset_train = torchvision.datasets.CIFAR100(image_dir, download=True, transform= transform)
         dataset_test = torchvision.datasets.CIFAR100(image_dir, download=True,train=False,  transform= transform)
 
-    elif dataset_name == 'mnist':
+    elif dataset_name == 'mnist_classification':
         transform = transforms.Compose([
             transforms.ToTensor(),  
             transforms.Normalize(mean=[0.485], std=[0.229]),

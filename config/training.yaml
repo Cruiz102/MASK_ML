@@ -1,5 +1,7 @@
 defaults:
-  - datasets: classification  # Corrected the key-value format
+  - _self_
+  - datasets: mnist_classification  
+  - model : mlp_classification
   - override hydra/sweeper: optuna
 
 hydra:
@@ -16,60 +18,11 @@ hydra:
 
 output_dir: ./runs
 experiment_name: mnisttry
-dataset: mnist
 task: mlp_classification
 batch_size: 4
 learning_rate: 0.00002
-image_size: 28
+image_size: 32
 epochs: 1
 saved_weight_path: ""
 visualization:
   attention_heads: [1]
-model:
-  task: mlp_classification  # or 'segmentation' or mlp_classification
-
-  mlp_classification:
-    _target_: "mask_ml.model.mlp.MLPClassificationConfig"  
-    num_classes: 10
-    input_size: 784
-    hidden_size : 100
-    num_layers: 5
-    sigmoid_output: True
-  vit_classification:
-    _target_: "mask_ml.model.vit.VitClassificationConfig"  # Replace with the actual path
-    num_classes: 1000
-    input_size: 768
-    model_config:  # Fixed indentation here
-      transformer_blocks: 12
-      image_size: 256
-      patch_size: 16
-      num_channels: 3
-      encoder_stride: 4
-      positional_embedding: "sinusoidal"
-      embedded_size: 768
-      attention_heads: 12
-      mlp_hidden_size: 3072
-      mlp_layers: 2
-      activation_function: "relu"
-      dropout_prob: 0.1
-      use_mask_token: False
-  segmentation_auto_encoder:
-    _target_: "mask_ml.model.segmentation_auto_encoder.SegmentationAutoEncoderConfig"  # Replace with the actual path
-    encoder_config:
-      transformer_blocks: 12
-      image_size: 224
-      patch_size: 16
-      num_channels: 3
-      encoder_stride: 4
-      positional_embedding: "sine"
-      embedded_size: 768
-      attention_heads: 12
-      mlp_hidden_size: 3072
-      mlp_layers: 2
-      activation_function: "relu"
-      dropout_prob: 0.1
-    decoder_config:
-      transformer_blocks: 6
-      num_multimask_outputs: 3
-      iou_mlp_depth: 2
-

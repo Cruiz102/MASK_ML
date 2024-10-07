@@ -1,0 +1,12 @@
+
+
+download: True
+base_dir: /sadf/adf
+imagenet_train:
+    image_dir: /train
+    annotation_dir: /val
+
+
+imagenet_validation:
+    image_dir: /val
+    annotation_dir: /val

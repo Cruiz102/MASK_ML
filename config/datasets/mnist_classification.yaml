@@ -1,0 +1,5 @@
+name: 'mnist_classification'
+download: True
+base_dir: ./
+num_classes: 10
+labels: [1,2,3,4]   
