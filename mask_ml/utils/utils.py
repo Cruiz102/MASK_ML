@@ -17,19 +17,6 @@ def read_yaml(yaml_file: str) -> Optional[Any] :
         return None
     
 
-class PreProcessorConfig:
-    do_resize: bool
-    augmentation: bool
-
-class PreProcessor:
-    def __init__(self):
-        self.new_size = (255,255)
-
-    def resize(self, img: Union[np.ndarray, torch.tensor, Image.Image]):
-
-        resized_image = img.resize(self.new_size)
-        return resized_image
-
 
 # AI GENERATED
 def calculate_conv2d_output_dimensions(H_in, W_in, K, S, P=0, D=1):
@@ -93,3 +80,40 @@ def get_bbox_from_mask(mask):
             x2 = max(x2, x_t + w_t)
             y2 = max(y2, y_t + h_t)
     return [x1, y1, x2, y2]
+
+
+import psutil
+import GPUtil
+import csv
+
+def monitor_resources(csv_file, step_count):
+    if step_count % 500 == 0:    
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        memory = psutil.virtual_memory().percent
+        
+        gpus = GPUtil.getGPUs()
+        gpu_data = []
+        for gpu in gpus:
+            gpu_data.append({
+                "gpu_id": gpu.id,
+                "gpu_name": gpu.name,
+                "gpu_load": gpu.load * 100,
+                "gpu_memory_used": gpu.memoryUsed,
+                "gpu_memory_total": gpu.memoryTotal,
+                "gpu_temperature": gpu.temperature
+            })
+        
+        with open(csv_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            for gpu in gpu_data:
+                writer.writerow([
+                    step_count,
+                    cpu_percent,
+                    memory,
+                    gpu['gpu_id'],
+                    gpu['gpu_name'],
+                    gpu['gpu_load'],
+                    gpu['gpu_memory_used'],
+                    gpu['gpu_memory_total'],
+                    gpu['gpu_temperature']
+                ])

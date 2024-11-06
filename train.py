@@ -16,6 +16,9 @@ from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
 from hydra.utils import instantiate
+from mask_ml.utils.utils import monitor_resources
+
+
 def create_unique_experiment_dir(output_dir, experiment_name):
     experiment_dir = os.path.join(output_dir, experiment_name)
     counter = 1
@@ -34,8 +37,9 @@ def plot_loss_per_step(step_losses, output_path):
     plt.grid(True)
     plt.savefig(os.path.join(output_path, 'step_loss_plot.png'))
     plt.close()
+
 @hydra.main(version_base=None, config_path="config", config_name="training")
-def run_training(cfg: DictConfig) -> float:
+def run_training(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
     dataloader_train, dataloader_test = create_dataloader(cfg)
@@ -81,16 +85,17 @@ def run_training(cfg: DictConfig) -> float:
 
     loss_file = os.path.join(experiment_dir, "step_losses.csv")
     training_data_file = os.path.join(experiment_dir, 'training_data.txt')
+    resources_file = os.path.join(experiment_dir, 'resources.csv')
     model = model.to(device)
 
-    step_losses = []  # To store loss for each step (batch)
+    step_losses = [] 
+    step_count = 1
 
     with open(training_data_file, 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
     with open(loss_file, 'w') as f:
-        f.write("step,loss\n")  # Header for the CSV file
+        f.write("step,loss\n") 
     try:
-        step_count = 1
         for epoch in range(epochs):
             for batch_idx, (inputs, labels) in tqdm(enumerate(dataloader_train), total=len(dataloader_train), desc=f"Epoch {epoch+1}/{epochs}"):
                 inputs = inputs.to(device)
@@ -102,11 +107,10 @@ def run_training(cfg: DictConfig) -> float:
                 optimizer.step()
 
                 step_losses.append(loss.item())  # Log the loss per step
-
                 # Save step loss to the file
                 with open(loss_file, 'a') as f:
                     f.write(f"{step_count},{loss.item()}\n")
-                
+                monitor_resources(resources_file, step_count)
                 step_count += 1
 
             model_save_path = os.path.join(experiment_dir, f"model_epoch_{epoch+1}.pth")
