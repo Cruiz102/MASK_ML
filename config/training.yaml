@@ -1,7 +1,7 @@
 defaults:
   - _self_
-  - datasets: mnist_classification  
-  - model : mlp_classification
+  - datasets: imagenet_classification  
+  - model : vit_classification
   - override hydra/sweeper: optuna
 
 hydra:
@@ -17,12 +17,11 @@ hydra:
 
 
 output_dir: ./runs
-experiment_name: mnisttry
-task: mlp_classification
+experiment_name: vit
 batch_size: 4
 learning_rate: 0.00002
-image_size: 32
+image_reshape: 32
 epochs: 1
-saved_weight_path: ""
+transfer_learning_weights: ""
 visualization:
   attention_heads: [1]

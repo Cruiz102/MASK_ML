@@ -1,5 +1,6 @@
 
 
+name: 'imagenet_classification'
 download: True
 base_dir: /sadf/adf
 imagenet_train:

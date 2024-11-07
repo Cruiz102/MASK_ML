@@ -29,7 +29,7 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
     batch_size = cfg['batch_size']
     shuffle = cfg.get('shuffle', False)
     download = cfg.get('download', False)
-    image_size = cfg.get("image_size", 256)
+    image_size = cfg.get("image_reshape", 256)
     
     # Select the appropriate dataset
     if dataset_name == "coco":

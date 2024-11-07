@@ -9,9 +9,18 @@ import cv2
 import requests
 import math
 from typing import Optional, Union, Tuple, List, Literal
-
 from dataclasses import dataclass, field
 from typing import Optional, Literal
+import logging
+
+# Configure logging
+transformer_logger = logging.getLogger("transformer")
+transformer_logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+transformer_logger.addHandler(handler)
+
 
 
 @dataclass
@@ -22,11 +31,6 @@ class TransformerConfig:
     mlp_layers: int = 2
     activation_function: str = "relu"
     dropout_prob : float = 0.2
-
-
-
-
-
 
 
 class MLP(nn.Module):
@@ -55,11 +59,12 @@ class MLP(nn.Module):
             raise ValueError(f"Unsupported activation function: {activation_function}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # transformer_logger.debug("Running Transformer Forward Pass")
+        # transformer_logger.debug("Input Tensor Shape:", x.shape)
         # Pass input through all layers except the last one with activation
-        for layer in self.layers[:-1]: # type: ignore
+        for layer in self.layers[:-1]:
             x = self.activation(layer(x))
         
-        # No activation on the final layer
         x = self.layers[-1](x)
         return x
 
@@ -157,9 +162,12 @@ class MultiHeadAttention(nn.Module):
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
     def forward(self, x, position_ids: Optional[Tensor] = None, return_attention_head = False)-> Union[Tensor, Tuple[Tensor, Tensor]]:
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        # transformer_logger.debug("Running Forward Pass MultiHeadAttention\n")
+        # transformer_logger.debug(f"MultiheadAttention: Batch Size:{B}, Sequence Length: {T}, Embedding Dimension: {C}")
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v   = self.c_attn(x).split(self.config.embedded_size, dim=2)
+    
         k = k.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
