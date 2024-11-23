@@ -36,6 +36,9 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
         dataset_train = CocoSegmentationDataset("annotation_dir", image_dir, download=download)
     elif dataset_name == "sa1b":
         dataset_train = SA1BImageDataset(image_dir, download=download)
+    elif dataset_name =='imagenet_classification':
+        dataset_train = torchvision.datasets.ImageNet(image_dir, split='val')
+        
     elif dataset_name == 'cifar100_classification':
         # Define the transformation to convert images to tensors and normalize
         transform = transforms.Compose([

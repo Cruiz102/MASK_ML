@@ -17,6 +17,18 @@ This repository reflects my journey in implementing core ideas from the field in
 
 ---
 
+## Downloading Datasets
+
+
+#### Coco dataset
+For using the Coco dataset you can use the script download_datasets.py
+
+#### Imagenet Dataset
+For using the Imagenet Dataset you must create a Kaggle Account and follow the following link.
+
+#### CIFAR + MNIST
+These are downloaded automatically by Pytorch.
+
 ## Project Principles
 
 To ensure the project's efficiency and scalability, the following principles guide its development:
