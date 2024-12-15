@@ -2,21 +2,17 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
 from mask_ml.utils.datasets import create_dataloader
-from typing import List
 from mask_ml.model.vit import  VitClassificationConfig, VitClassificationHead
-from mask_ml.model.mask_decoder import MaskDecoderConfig
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 from mask_ml.model.mlp import MLPClassification, MLPClassificationConfig
-from mask_ml.model.mask_decoder import MLP
-import os
-import matplotlib.pyplot as plt  # Import matplotlib for plotting
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
 from hydra.utils import instantiate
 from mask_ml.utils.utils import monitor_resources
+import os
 
 
 def create_unique_experiment_dir(output_dir, experiment_name):

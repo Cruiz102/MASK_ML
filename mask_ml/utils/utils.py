@@ -1,10 +1,13 @@
-from typing import Optional, Any, Union, List, Tuple
+from typing import Optional, Any
 import numpy as np
 import torch
 import yaml
-from PIL import Image
 import math
 import cv2
+import psutil
+import GPUtil
+import csv
+
 def read_yaml(yaml_file: str) -> Optional[Any] :
     if not yaml_file:
         print("No YAML file provided or file not found.")
@@ -82,9 +85,7 @@ def get_bbox_from_mask(mask):
     return [x1, y1, x2, y2]
 
 
-import psutil
-import GPUtil
-import csv
+
 
 def monitor_resources(csv_file, step_count):
     if step_count % 500 == 0:    

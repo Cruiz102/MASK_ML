@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 REQUIRED_PACKAGES = [
     'hydra-core==1.3.2',
-    'pycocotools==2.0.7',
+    'pycocotools',
     'opencv-python==4.10.0.84',
     'torch==2.4.0',
     'torchvision==0.19.0',

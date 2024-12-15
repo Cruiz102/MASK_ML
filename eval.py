@@ -2,18 +2,13 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 from mask_ml.utils.datasets import create_dataloader
-from typing import List
 from mask_ml.model.vit import VitClassificationHead
 from mask_ml.model.mlp import MLPClassification
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
-from mask_ml.model.metrics import iou_score
 import os
 import time
 import csv
 import torch
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import confusion_matrix, f1_score
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from enum import Enum
 
@@ -69,7 +64,14 @@ def validation_test(output_path: str, model: torch.nn.Module, dataloader: torch.
 def run_evaluation(cfg: DictConfig):
     # Print the full configuration
     print(OmegaConf.to_yaml(cfg))
-    dataloader = create_dataloader(cfg, train=False)
+    print(OmegaConf.to_yaml(cfg))
+    dataloader_train, dataloader_test = create_dataloader(cfg)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    experiment_name = cfg.experiment_name
+    output_dir = cfg.output_dir
+    os.makedirs(output_dir, exist_ok=True)
+    experiment_dir = create_unique_experiment_dir(output_dir, experiment_name)
+    model_config = instantiate(cfg.model)
 
 
     model.eval()  # Set the model to evaluation mode

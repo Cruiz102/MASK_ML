@@ -161,16 +161,13 @@ class MultiHeadAttention(nn.Module):
 
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
     def forward(self, x, position_ids: Optional[Tensor] = None, return_attention_head = False)-> Union[Tensor, Tuple[Tensor, Tensor]]:
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
-        # transformer_logger.debug("Running Forward Pass MultiHeadAttention\n")
-        # transformer_logger.debug(f"MultiheadAttention: Batch Size:{B}, Sequence Length: {T}, Embedding Dimension: {C}")
+        B, Seq, n_embd = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v   = self.c_attn(x).split(self.config.embedded_size, dim=2)
-    
-        k = k.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.config.attention_heads, C // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
+        k = k.view(B, Seq, self.config.attention_heads, n_embd // self.config.attention_heads).transpose(1, 2) # (B,    , T, hs)
+        q = q.view(B, Seq, self.config.attention_heads, n_embd // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, Seq, self.config.attention_heads, n_embd // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
 
 
         # Get the positional relative embeddings with  RoPE:
@@ -190,7 +187,7 @@ class MultiHeadAttention(nn.Module):
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        y = y.transpose(1, 2).contiguous().view(B, Seq, n_embd) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))

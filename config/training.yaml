@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - datasets: imagenet_classification  
+  - datasets: mnist_classification  
   - model : vit_classification
   - override hydra/sweeper: optuna
 

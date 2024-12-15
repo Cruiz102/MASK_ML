@@ -1,28 +1,22 @@
 import torch
 from torch.utils.data import Dataset
-from torchvision import datasets
-from torchvision.transforms import ToTensor
 from torchvision import transforms
-import matplotlib.pyplot as plt
 from pycocotools.coco import COCO
 from pycocotools import mask as maskUtils
 import os
 from torchvision.io import read_image
 import numpy as np
-import torch.functional as F
 from torchvision.transforms import Resize
 import json
 from torch.utils.data import DataLoader
 import torchvision
-from mask_ml.utils.download_dataset import download_and_extract_files
-import os
-from omegaconf import DictConfig, OmegaConf
-import torchvision
+from omegaconf import DictConfig
+from typing import Union, Tuple
 
 # Assuming you have these dataset classes defined somewhere
 # from your_datasets_module import CocoSegmentationDataset, SA1BImageDataset
 
-def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
+def create_dataloader(cfg: DictConfig, train=True) -> Union[Tuple[DataLoader, DataLoader],DataLoader]:
     dataset = cfg['datasets']
     dataset_name = dataset['name']
     image_dir = cfg['datasets']['base_dir']
@@ -56,7 +50,7 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
             transforms.Resize((image_size,image_size)),  
         ])
         dataset_train = torchvision.datasets.MNIST(image_dir, train=True, download=True, transform=transform)
-        dataset_test = datasets.MNIST(image_dir, train=False,transform=transform)
+        dataset_test = torchvision.datasets.MNIST(image_dir, train=False,transform=transform)
 
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
@@ -64,9 +58,9 @@ def create_dataloader(cfg: DictConfig, train=True) -> DataLoader:
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=shuffle)
     dataloader_test = DataLoader(dataset=dataset_test, batch_size=batch_size, shuffle=shuffle)
     print(dataset_name, "This is the dataset name")
-    if train==False:
+    if not train:
         return dataloader_test
-    return dataloader_train, dataloader_test
+    return (dataloader_train, dataloader_test)
 
 
 class CocoSegmentationDataset(Dataset):
@@ -113,7 +107,7 @@ class CocoSegmentationDataset(Dataset):
         #Check if the directory exists
             if not os.path.exists(self.img_dir):
                 # If it does not exist, create it
-                download_and_extract_files()
+                # download_and_extract_files()
                 print(f"Directory '{self.img_dir}' created.")
             else:
                 print(f"Directory '{self.img_dir}' already exists.")
