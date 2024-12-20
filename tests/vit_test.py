@@ -1,7 +1,5 @@
 import pytest
 from mask_ml.model.vit import VitClassificationConfig, VitClassificationHead, ViTConfig, generate_all_valid_configurations
-from torchvision import transforms
-import torchvision
 import torch
 
 def test_vit_model_with_specific_configuration():
@@ -42,6 +40,11 @@ def test_vit_model_with_specific_configuration():
     assert output.shape == (1, 10), f"Expected output shape (1, 10), got {output.shape}"
 
     print("Forward pass successful with output:", output)
+
+
+
+def test_embedding_size_creating_vit():
+    pass
 
 # Run the test with Pytest
 if __name__ == "__main__":

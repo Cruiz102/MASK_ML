@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch import Tensor
 import torch.nn.functional as F
-from typing import Optional, Union, List, Literal, Tuple
+from typing import Optional, Union, List, Literal
 from PIL import Image
 import numpy as np
 from torchvision.transforms.functional import to_tensor
