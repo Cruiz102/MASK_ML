@@ -4,6 +4,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import CocoDetection
+from tqdm import tqdm
 import os
 
 class AutoEncoder(nn.Module):
@@ -68,10 +69,63 @@ def collate_fn(batch):
         images.append(image)  
         targets.append(target)  # Keep annotations as they are
     return torch.stack(images), targets
-from tqdm import tqdm
-import torch
 
-def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, device: torch.device):
+def save_model_checkpoint(model: nn.Module, save_path: str):
+    """Save the model checkpoint."""
+    torch.save(model.state_dict(), save_path)
+    print(f"Model checkpoint saved at {save_path}")
+
+def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.device, output_dir: str):
+    """
+    Evaluate the model and save reconstructed images.
+
+    Args:
+        model (nn.Module): Trained autoencoder.
+        eval_loader (DataLoader): DataLoader for evaluation.
+        device (torch.device): Device to run the model on.
+        output_dir (str): Directory to save reconstructed images.
+    """
+    # Move model to the specified device
+    model.to(device)
+    model.eval()
+    os.makedirs(output_dir, exist_ok=True)
+
+    with torch.no_grad():
+        for batch_idx, (images, _) in enumerate(tqdm(eval_loader, desc="Evaluating")):
+            # Move images to the device
+            images = images.to(device)
+
+            # Forward pass
+            outputs = model(images)
+
+            # Move outputs to CPU for saving
+            images_cpu = images.cpu()
+            outputs_cpu = outputs.cpu()
+
+            # Save original and reconstructed images
+            for i in range(images_cpu.size(0)):
+                # If you applied normalization during preprocessing, you may need to unnormalize here
+                # For example:
+                # unnormalize = transforms.Normalize(
+                #     mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
+                #     std=[1/0.229, 1/0.224, 1/0.225]
+                # )
+                # img = unnormalize(images_cpu[i])
+
+                # Convert tensors to PIL Images
+                original_image = transforms.ToPILImage()(images_cpu[i])
+                reconstructed_image = transforms.ToPILImage()(outputs_cpu[i])
+
+                # Save images
+                original_image.save(os.path.join(output_dir, f"original_{batch_idx * eval_loader.batch_size + i}.png"))
+                reconstructed_image.save(os.path.join(output_dir, f"reconstructed_{batch_idx * eval_loader.batch_size + i}.png"))
+
+    print(f"Reconstructed images saved to {output_dir}")
+
+def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, device: torch.device, checkpoint_dir: str):
+    """
+    Train the autoencoder and save model checkpoints.
+    """
     lr = 2e-5
     epochs = 10
     optimizer = Adam(model.parameters(), lr=lr)
@@ -79,6 +133,7 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
 
     # Move model to GPU
     model.to(device)
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     for epoch in range(epochs):
         print(f"Starting epoch {epoch + 1}/{epochs}")
@@ -88,11 +143,6 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         # Training loop with tqdm
         with tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs} [Training]") as pbar:
             for images, _ in pbar:
-                # Ensure images are 4D (batch_size, channels, height, width)
-                if len(images.shape) != 4:
-                    raise ValueError(f"Expected 4D input, got {images.shape}")
-
-                # Move images to GPU
                 images = images.to(device)
 
                 # Forward pass
@@ -110,6 +160,10 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         train_loss /= len(train_loader)
         print(f"Epoch {epoch + 1}/{epochs} completed. Average Train Loss: {train_loss:.4f}")
 
+        # Save model checkpoint
+        checkpoint_path = os.path.join(checkpoint_dir, f"autoencoder_epoch_{epoch + 1}.pth")
+        save_model_checkpoint(model, checkpoint_path)
+
         # Validation phase with tqdm
         model.eval()
         val_loss = 0.0
@@ -118,46 +172,38 @@ def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoad
         with torch.no_grad():
             with tqdm(val_loader, desc=f"Epoch {epoch + 1}/{epochs} [Validation]") as pbar:
                 for images, _ in pbar:
-                    if len(images.shape) != 4:
-                        raise ValueError(f"Expected 4D input, got {images.shape}")
-
-                    # Move images to GPU
                     images = images.to(device)
-
-                    # Forward pass
                     outputs = model(images)
                     loss = criterion(outputs, images)
-
                     val_loss += loss.item()
                     pbar.set_postfix({"Batch Loss": loss.item()})
 
         val_loss /= len(val_loader)
         print(f"Epoch {epoch + 1}/{epochs} completed. Average Validation Loss: {val_loss:.4f}")
 
+
 if __name__ == "__main__":
     # Path to COCO dataset
     coco_root = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'coco')
-    train_images = f"{coco_root}/train2014"
-    val_images = f"{coco_root}/val2014"
-    annotations = f"{coco_root}/annotations"
+    train_images = f"{coco_root}/2014_train_images/train2014"
+    val_images = f"{coco_root}/2014_val_images/val2014"
+    annotations = f"{coco_root}/2014_train_val_annotations/annotations"
 
     # Define device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Define a transform for the dataset (resize, normalize, etc.)
+    # Define a transform for the dataset
     transform = transforms.Compose([
         transforms.Resize((224, 224)),  # Resize to 224x224
         transforms.ToTensor(),          # Convert PIL images to tensors
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet stats
     ])
 
-    
     val_dataset = CocoDetection(
         root=val_images,
         annFile=f"{annotations}/instances_val2014.json",
         transform=transform
     )
-
 
     val_loader = DataLoader(
         val_dataset,
@@ -168,6 +214,13 @@ if __name__ == "__main__":
         collate_fn=collate_fn
     )
 
-    # Initialize the model and train
+    # Initialize the model
     model = AutoEncoder()
-    train_model(model, val_loader, val_loader, device)
+
+    # Train the model
+    checkpoint_dir = "./checkpoints"
+    train_model(model, val_loader, val_loader, device, checkpoint_dir)
+
+    # Evaluate the model and save reconstructed images
+    eval_output_dir = "./reconstructed_images"
+    evaluate_model(model, val_loader, device, eval_output_dir)
