@@ -24,6 +24,8 @@ class ViTConfig:
     encoder_stride: int = 16
     use_mask_token: bool = False
     positional_embedding: Literal["sinusoidal", "rotary", "learned"] = "sinusoidal"
+    interpolation: bool = False
+    interpolation_scale: int = 1
 
     # TransformerConfig parameters
     embedded_size: int = 200
@@ -39,11 +41,6 @@ class VitClassificationConfig:
         model_config : ViTConfig
         input_size : int
         num_classes : int
-
-def check_vit_configuration_validity(config: ViTConfig):
-    # Check The Attentions heads separations. For example 
-    pass
-
 
 
 def find_divisors(n: int):
@@ -65,20 +62,21 @@ def generate_all_valid_configurations(image_size: int):
     configurations = []
 
     for kernel_size in divisors_of_square_image:
-            stride = kernel_size
-            sequences = calculate_conv2d_output_dimensions(
-                H_in=image_size, W_in=image_size, K=kernel_size, S=kernel_size
-            )
-            sequences = sequences[0] * sequences[1]
+            for stride_size in divisors_of_square_image:
 
-            attention_heads = image_size // kernel_size
+                sequences = calculate_conv2d_output_dimensions(
+                    H_in=image_size, W_in=image_size, K=kernel_size, S=kernel_size
+                )
+                sequences = sequences[0] * sequences[1]
 
-            configurations.append({
-                "sequence_per_image": sequences,
-                "attention_heads": attention_heads,
-                "kernel": kernel_size,
-                "stride": stride
-            })
+                attention_heads = image_size // kernel_size
+
+                configurations.append({
+                    "sequence_per_image": sequences,
+                    "attention_heads": attention_heads,
+                    "kernel": kernel_size,
+                    "stride": stride_size
+                })
 
     return configurations
 
@@ -90,9 +88,13 @@ class VITPatchEncoder(nn.Module):
     def __init__(self,config: ViTConfig):
         super(VITPatchEncoder, self).__init__()
         self.config = config
+        self.interpolate_sequence = False
+    
+
+
         self.cls_token = nn.Parameter(torch.randn(1, 1, config.embedded_size))
         self.mask_token = nn.Parameter(torch.zeros(1, 1, config.embedded_size)) if self.config.use_mask_token else None
-        self.projection = nn.Conv2d(config.num_channels,config.embedded_size, config.patch_size, config.patch_size)
+        self.projection = nn.Conv2d(in_channels=config.num_channels,out_channels=config.embedded_size, kernel_size=config.patch_size, stride=config.encoder_stride)
         self.height_feature_map, self.width_feature_map = calculate_conv2d_output_dimensions(
             H_in=self.config.image_size, W_in=self.config.image_size, S=config.encoder_stride, K=config.patch_size)
         self.sequence_length  = self.height_feature_map * self.width_feature_map
@@ -119,7 +121,13 @@ class VITPatchEncoder(nn.Module):
             images = to_tensor(images)
 
         B,C, H, W = images.shape
-        embeddings = self.projection(images).flatten(2).transpose(1, 2)
+        embeddings = self.projection(images)  # Shape: (B, embedded_size, H', W')
+        if self.config.interpolation:
+            # Perform interpolation directly on the projected embeddings
+            new_height = int(self.height_feature_map * self.config.interpolation_scale)
+            new_width = int(self.width_feature_map * self.config.interpolation_scale)
+            embeddings = F.interpolate(embeddings, size=(new_height, new_width), mode='bilinear', align_corners=False)
+        embeddings = embeddings.flatten(2).transpose(1, 2)  # Shape: (B, Sequence, embedded_size)
         if self.config.positional_embedding:
             embeddings += self.pos_embed.to(embeddings.device)
         # add the [CLS] token to the embedded patch tokens
@@ -156,7 +164,6 @@ class VitClassificationHead(nn.Module):
         self.config = config
         self.linear_classifier = nn.Linear(config.input_size, config.num_classes)
     def forward(self, x: Union[Tensor, List[Image.Image]]):
-
         outputs = self.model(x)
         # The 0 index is the [CLS] Token.
         logits = self.linear_classifier(outputs[:, 0, :])
