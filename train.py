@@ -12,33 +12,9 @@ from torch.optim.adamw import AdamW
 from eval import validation_test
 from hydra.utils import instantiate
 from mask_ml.utils.utils import monitor_resources
+from utils import create_unique_experiment_dir, plot_loss_per_step
 import os
 
-
-def create_unique_experiment_dir(output_dir, experiment_name):
-    experiment_dir = os.path.join(output_dir, experiment_name)
-    counter = 1
-    while os.path.exists(experiment_dir):
-        experiment_dir = os.path.join(output_dir, f"{experiment_name}_{counter}")
-        counter += 1
-    os.makedirs(experiment_dir, exist_ok=True)
-    return experiment_dir
-
-def plot_loss_per_step(step_losses, output_path):
-    plt.figure()
-    plt.plot(range(1, len(step_losses) + 1), step_losses, marker='o', markersize=2)
-    plt.title('Loss per Step (Batch)')
-    plt.xlabel('Step (Batch)')
-    plt.ylabel('Loss')
-    plt.grid(True)
-    plt.savefig(os.path.join(output_path, 'step_loss_plot.png'))
-    plt.close()
-
-def plot_recourses_per_step(output_path):
-    plt.figure()
-    plt.grid()
-    plt.savefig(os.path.join(output_path,'resources_plot.png'))
-    plt.close()
 
 
 @hydra.main(version_base=None, config_path="config", config_name="training")
@@ -64,6 +40,9 @@ def run_training(cfg: DictConfig):
 
     elif isinstance(model_config, SegmentationAutoEncoderConfig):
         model = SegmentationAutoEncoder(model_config)
+
+    else:
+        raise ValueError(f"Unsupported model config type: {type(model_config)}")
 
     if cfg.transfer_learning_weights:
         state_dict = torch.load(cfg.transfer_learning_weights, weights_only=True)

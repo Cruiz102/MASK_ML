@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch import Tensor
 import torch.nn.functional as F
-from typing import Optional, Union, List, Literal
+from typing import Optional, Union, List, Literal, Tuple
 from PIL import Image
 import numpy as np
 from torchvision.transforms.functional import to_tensor
@@ -23,7 +23,7 @@ class ViTConfig:
     num_channels: int = 3
     encoder_stride: int = 16
     use_mask_token: bool = False
-    positional_embedding: Literal["sinusoidal", "rotary", "learned"] = "sinusoidal"
+    positional_embedding: Literal["sinusoidal", "learned"] = "sinusoidal"
     interpolation: bool = False
     interpolation_scale: int = 1
 
@@ -34,6 +34,8 @@ class ViTConfig:
     mlp_layers: int = 2
     activation_function: str = "relu"
     dropout_prob: float = 0.2
+    flash_attention = False
+    rotary_relative_embeddings = False
 
 
 @dataclass
@@ -146,15 +148,18 @@ class VitModel(nn.Module):
             mlp_layers=config.mlp_layers,
             activation_function=config.activation_function,
             dropout_prob= config.dropout_prob
-        )
+            )
         self.embedded_layer = VITPatchEncoder(config)
         self.transformer_blocks = nn.ModuleList([TransformerBlock(self.transformer_config) for _ in range(self.config.transformer_blocks)])
 
-    def forward(self, x: Union[Tensor, List[Image.Image]], attention_heads_idx: Optional[List[int]] = None):
-        y = self.embedded_layer(x) # Size (Batch, sequence_length, embedded_size)
-        for block in self.transformer_blocks:
-            y = block(y)
-        return y
+    def forward(self, x: Union[Tensor, List[Image.Image]], attention_heads_idx: List[int] = [])-> Tuple[Tensor, List]:
+        y = self.embedded_layer(x)  # Size (Batch, sequence_length, embedded_size)
+        attention_heads = []
+        for i, block in enumerate(self.transformer_blocks):
+            y, attn_h = block(y)
+            if i in attention_heads_idx:
+                attention_heads.append(attn_h)
+        return y, attention_heads
     
 
 class VitClassificationHead(nn.Module):
@@ -163,12 +168,11 @@ class VitClassificationHead(nn.Module):
         self.model = VitModel(config.model_config)
         self.config = config
         self.linear_classifier = nn.Linear(config.input_size, config.num_classes)
-    def forward(self, x: Union[Tensor, List[Image.Image]]):
-        outputs = self.model(x)
-        # The 0 index is the [CLS] Token.
-        logits = self.linear_classifier(outputs[:, 0, :])
-        probs = F.softmax(logits)
-        return probs
+    def forward(self, x: Union[Tensor, List[Image.Image]], attention_heads_idx: List[int]=[]):
+        outputs, attention_heads = self.model(x, attention_heads_idx)
+        logits = self.linear_classifier(outputs[:, 0, :])# The 0 index is the [CLS] Token.
+        probs = F.softmax(logits, dim=-1)
+        return probs, attention_heads
 
 
 

@@ -1,11 +1,14 @@
 defaults:
+  - _self_
   - model: vit_classification
-  - datasets: classification
+  - datasets: mnist_classification
+  - override hydra/sweeper: optuna
 output_dir: ./runs
-dataset: cifar100
-task: classification
+experiment_name: vit_eval_rr
+transfer_learning_weights: "/home/cesar/Projects/MASK_ML/runs/vit_2/model_epoch_1.pth"
+# Data
+image_reshape: 32
 batch_size: 8
-checkpoint: ""
 
-visualization:
-  attention_heads: [1]
+attention_heads: [0]  # Indices of attention heads to visualize
+num_batches: 3  # Number of random batches to visualize

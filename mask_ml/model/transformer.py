@@ -31,6 +31,8 @@ class TransformerConfig:
     mlp_layers: int = 2
     activation_function: str = "relu"
     dropout_prob : float = 0.2
+    flash_attention: bool = False
+    rotary_relative_embeddings: bool = False
 
 
 class MLP(nn.Module):
@@ -160,7 +162,7 @@ class MultiHeadAttention(nn.Module):
             self.rot_embeddings = RotaryEmbedding(config.embedded_size)
 
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
-    def forward(self, x, position_ids: Optional[Tensor] = None, return_attention_head = False)-> Union[Tensor, Tuple[Tensor, Tensor]]:
+    def forward(self, x, position_ids: Optional[Tensor] = None)-> Tuple[Tensor, Tensor]:
         B, Seq, n_embd = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -177,9 +179,10 @@ class MultiHeadAttention(nn.Module):
 
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
+        if self.config.flash_attention:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            att = y
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -191,10 +194,8 @@ class MultiHeadAttention(nn.Module):
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
-        if return_attention_head:
-            return y, att
-        else:
-            return y
+        
+        return y, att
     
     
 
@@ -207,15 +208,9 @@ class TransformerBlock(nn.Module):
         self.norm_layer_2 = nn.LayerNorm(config.embedded_size)
         hidden_layers = [config.mlp_hidden_size for _ in range(config.mlp_layers) ]
         self.feed_forward = MLP("relu", config.embedded_size, config.embedded_size,hidden_layers)
-    def forward(self, x: Tensor, return_attention_head = False) -> Union[Tensor,Tuple[Tensor,Tensor]]:
-        if return_attention_head:
-            y, attention_head = x + self.attention(self.norm_layer_1(x), return_attention_head)
-        else:
-            y = x + self.attention(self.norm_layer_1(x), return_attention_head)
-
+    def forward(self, x: Tensor) -> Tuple[Tensor,Tensor]:
+        y,attention_head = self.attention(self.norm_layer_1(x))
+        y  += x
         y = y + self.feed_forward(self.norm_layer_2(y))
-        if  return_attention_head:
-            return y, attention_head
-        else:
-            return y
+        return y, attention_head
 
