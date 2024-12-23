@@ -79,7 +79,10 @@ def run_training(cfg: DictConfig):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 optimizer.zero_grad()
-                y = model(inputs)
+                if isinstance(model, VitClassificationHead):
+                    y,_ = model(inputs)
+                else:
+                    y = model(inputs)
                 loss = criterion(y, labels)
                 loss.backward()
                 optimizer.step()

@@ -1,60 +1,182 @@
 import torch
 import torch.nn as nn
-from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import CocoDetection
 from tqdm import tqdm
 import os
+import hydra
+from omegaconf import DictConfig, OmegaConf
+from hydra.utils import instantiate
+from torch.optim.adamw import AdamW
 
-class AutoEncoder(nn.Module):
-    def __init__(self):
-        super(AutoEncoder, self).__init__()
-        # Adaptive pooling to reduce image size
-        self.pooling_layer = nn.AdaptiveAvgPool2d((32, 32))  # Downsample to 32x32
-        self.flatten_size = 32 * 32 * 3  # Flattened size after pooling (32x32 RGB)
+class ImageAutoEncoder(nn.Module):
+    def __init__(self,
+                 image_encoder: nn.Module,
+                 decoder: nn.Module,
+                 image_size: int,
+                 flatten: bool
 
-        # Encoder and decoder layers
-        self.encoder_linear_layers = [self.flatten_size, 1024, 256]
-        self.decoder_linear_layers = [256, 1024, self.flatten_size]
-
-        # Encoder
-        self.encoder_layers = nn.ModuleList(
-            [nn.Linear(self.encoder_linear_layers[i - 1] if i > 0 else self.flatten_size, width)
-             for i, width in enumerate(self.encoder_linear_layers)]
-        )
-
-        # Decoder
-        self.decoder_layers = nn.ModuleList(
-            [nn.Linear(self.decoder_linear_layers[i - 1], width) if i > 0 else nn.Linear(self.encoder_linear_layers[-1], width)
-             for i, width in enumerate(self.decoder_linear_layers)]
-        )
-
-        # Upsampling layer to match input dimensions
-        self.upsample_layer = nn.Upsample(size=(224, 224), mode='bilinear', align_corners=False)
-
-        self.activation = nn.ReLU()
-
+                 ):
+        super(ImageAutoEncoder, self).__init__()
+        self.image_encoder = image_encoder
+        self.decoder = decoder
+        self.image_size = image_size
+        self.flatten = flatten 
     def forward(self, x):
-        # Adaptive pooling to reduce size
-        x = self.pooling_layer(x)
-        x = x.view(x.size(0), -1)  # Flatten
-
-        # Encode
-        for layer in self.encoder_layers:
-            x = self.activation(layer(x))
-
-        # Decode
-        for layer in self.decoder_layers:
-            x = self.activation(layer(x))
-
-        # Reshape back to pooled image size
-        x = x.view(x.size(0), 3, 32, 32)
-
-        # Upsample to match input size
-        x = self.upsample_layer(x)
-
+        if self.flatten:
+            #TENSOR_SIZE: [BATCH,CHANNEL, IMAGE_SIZE, IMAGE_SIZE] 
+            x = x.flatten(2)  # Flatten -> [BATCH, CHANNEL, IMAGE_SIZE * IMAGE_SIZE]
+        x = self.image_encoder(x)
+        x = self.decoder(x)
         return x
+    
+
+class SparseAutoencoderCriterion(nn.Module):
+    def __init__(self, beta=1.0, sparsity_target=0.05):
+        super(SparseAutoencoderCriterion, self).__init__()
+        self.reconstruction_loss = nn.MSELoss()
+        self.beta = beta  # Weight for sparsity penalty
+        self.sparsity_target = sparsity_target  # Desired average activation
+
+    def forward(self, outputs, inputs, activations):
+        # Compute reconstruction loss
+        recon_loss = self.reconstruction_loss(outputs, inputs)
+
+        # Compute sparsity loss
+        mean_activation = torch.mean(activations, dim=0)  # Mean activation for each latent unit
+        sparsity_loss = torch.sum(self.sparsity_target * torch.log(self.sparsity_target / mean_activation) +
+                                  (1 - self.sparsity_target) * torch.log((1 - self.sparsity_target) / (1 - mean_activation)))
+
+        # Total loss
+        loss = recon_loss + self.beta * sparsity_loss
+        return loss
+    
+
+class DenoisingAutoencoderCriterion(nn.Module):
+    def __init__(self, noise_std=0.1):
+        """
+        Initialize the denoising autoencoder criterion.
+        :param noise_std: Standard deviation of the Gaussian noise to add.
+        """
+        super(DenoisingAutoencoderCriterion, self).__init__()
+        self.reconstruction_loss = nn.MSELoss()
+        self.noise_std = noise_std
+
+    def forward(self, model, clean_inputs):
+        """
+        Forward method computes the loss by adding noise and comparing with clean inputs.
+        :param model: The autoencoder model.
+        :param clean_inputs: Clean input images.
+        :return: Denoising loss.
+        """
+        # Add noise to the inputs
+        noisy_inputs = clean_inputs + torch.randn_like(clean_inputs) * self.noise_std
+        noisy_inputs = torch.clamp(noisy_inputs, 0, 1)  # Clamp to valid image range [0, 1]
+
+        # Forward pass through the model
+        outputs = model(noisy_inputs)
+
+        # Compute reconstruction loss
+        loss = self.reconstruction_loss(outputs, clean_inputs)
+        return loss
+
+
+import torch
+import torch.nn as nn
+
+class ContractiveAutoencoderCriterion(nn.Module):
+    def __init__(self, lambda_reg=1.0):
+        """
+        Initialize the Contractive Autoencoder Criterion.
+        :param lambda_reg: Regularization weight for the contractive penalty.
+        """
+        super(ContractiveAutoencoderCriterion, self).__init__()
+        self.reconstruction_loss = nn.MSELoss()
+        self.lambda_reg = lambda_reg
+
+    def forward(self, model, inputs):
+        """
+        Forward method to compute the loss.
+        :param model: The autoencoder model.
+        :param inputs: Original inputs.
+        :return: Contractive loss.
+        """
+        # Enable gradient computation for the inputs
+        inputs.requires_grad = True
+        
+        # Forward pass through the encoder to get latent representation
+        latent = model.image_encoder(inputs)
+        
+        # Compute reconstruction
+        reconstruction = model(inputs)
+
+        # Reconstruction loss
+        recon_loss = self.reconstruction_loss(reconstruction, inputs)
+
+        # Compute the Jacobian of the latent representation
+        # Sum the latent representations to aggregate gradients
+        latent_sum = torch.sum(latent)
+        latent_sum.backward(retain_graph=True)
+
+        # Compute the Frobenius norm of the Jacobian for the contractive loss
+        contractive_loss = 0
+        for param in inputs.grad:
+            contractive_loss += torch.sum(param ** 2)
+        
+        # Combine reconstruction and contractive losses
+        loss = recon_loss + self.lambda_reg * contractive_loss
+
+        # Reset gradients on inputs
+        inputs.requires_grad = False
+
+        return loss
+
+
+
+class Trainer:
+    def __init__(self, model , optimizer , criterion , dataloader ,checkpoint_dir, device="cuda"):
+        self.model = model.to(device = device)
+        self.optimizer = optimizer
+        self.criterion = criterion
+        self.device = device
+        self.dataloader = dataloader
+        self.checkpoint_dir = checkpoint_dir
+
+
+    def save_model_checkpoint(self, save_path: str):
+        """Save the model checkpoint."""
+        torch.save(self.model.state_dict(), save_path)
+        print(f"Model checkpoint saved at {save_path}")
+    def train_model(self, epochs):
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        for epoch in range(epochs):
+            print(f"Starting epoch {epoch + 1}/{epochs}")
+            self.model.train()
+            train_loss = 0.0
+            # Training loop with tqdm
+            with tqdm(self.dataloader, desc=f"Epoch {epoch + 1}/{epochs} [Training]") as pbar:
+                for images, _ in pbar:
+                    images = images.to(device)
+
+                    # Forward pass
+                    outputs = self.model(images)
+                    loss = self.criterion(outputs, images)
+
+                    # Backward pass
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+
+                    train_loss += loss.item()
+                    pbar.set_postfix({"Batch Loss": loss.item()})
+
+            train_loss /= len(self.dataloader)
+            print(f"Epoch {epoch + 1}/{epochs} completed. Average Train Loss: {train_loss:.4f}")
+            # Save model checkpoint
+            checkpoint_path = os.path.join(self.checkpoint_dir, f"autoencoder_epoch_{epoch + 1}.pth")
+            self.save_model_checkpoint(checkpoint_path)
+
 
 
 def collate_fn(batch):
@@ -70,10 +192,6 @@ def collate_fn(batch):
         targets.append(target)  # Keep annotations as they are
     return torch.stack(images), targets
 
-def save_model_checkpoint(model: nn.Module, save_path: str):
-    """Save the model checkpoint."""
-    torch.save(model.state_dict(), save_path)
-    print(f"Model checkpoint saved at {save_path}")
 
 def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.device, output_dir: str):
     """
@@ -122,64 +240,43 @@ def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.devi
 
     print(f"Reconstructed images saved to {output_dir}")
 
-def train_model(model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, device: torch.device, checkpoint_dir: str):
-    """
-    Train the autoencoder and save model checkpoints.
-    """
-    lr = 2e-5
-    epochs = 10
-    optimizer = Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()  # Using MSELoss for reconstruction error
 
-    # Move model to GPU
-    model.to(device)
-    os.makedirs(checkpoint_dir, exist_ok=True)
 
-    for epoch in range(epochs):
-        print(f"Starting epoch {epoch + 1}/{epochs}")
-        model.train()
-        train_loss = 0.0
 
-        # Training loop with tqdm
-        with tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs} [Training]") as pbar:
-            for images, _ in pbar:
-                images = images.to(device)
 
-                # Forward pass
-                outputs = model(images)
-                loss = criterion(outputs, images)
+@hydra.main(version_base=None, config_path="config", config_name="training")
+def run_training(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg))
+    coco_root = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'coco')
+    val_images = f"{coco_root}/2014_val_images/val2014"
+    annotations = f"{coco_root}/2014_train_val_annotations/annotations"
+    # Define a transform for the dataset
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),  # Resize to 224x224
+        transforms.ToTensor(),          # Convert PIL images to tensors
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet stats
+    ])
 
-                # Backward pass
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                train_loss += loss.item()
-                pbar.set_postfix({"Batch Loss": loss.item()})
-
-        train_loss /= len(train_loader)
-        print(f"Epoch {epoch + 1}/{epochs} completed. Average Train Loss: {train_loss:.4f}")
-
-        # Save model checkpoint
-        checkpoint_path = os.path.join(checkpoint_dir, f"autoencoder_epoch_{epoch + 1}.pth")
-        save_model_checkpoint(model, checkpoint_path)
-
-        # Validation phase with tqdm
-        model.eval()
-        val_loss = 0.0
-        print("Starting validation phase...")
-
-        with torch.no_grad():
-            with tqdm(val_loader, desc=f"Epoch {epoch + 1}/{epochs} [Validation]") as pbar:
-                for images, _ in pbar:
-                    images = images.to(device)
-                    outputs = model(images)
-                    loss = criterion(outputs, images)
-                    val_loss += loss.item()
-                    pbar.set_postfix({"Batch Loss": loss.item()})
-
-        val_loss /= len(val_loader)
-        print(f"Epoch {epoch + 1}/{epochs} completed. Average Validation Loss: {val_loss:.4f}")
+    dataset = CocoDetection(
+        root=val_images,
+        annFile=f"{annotations}/instances_val2014.json",
+        transform=transform
+    )
+    dataset_loader = DataLoader(
+        dataset,
+        batch_size=16,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=collate_fn
+    )
+    model = instantiate(cfg.model)
+    optimizer = AdamW(model.parameters(), lr=cfg.lr)
+    trainer = Trainer(model=model, optimizer=optimizer, dataloader= dataset_loader,
+                      criterion=,
+                      checkpoint_dir="./", device='cuda')
+    
+    trainer.train_model(cfg.epoch)
 
 
 if __name__ == "__main__":
@@ -188,10 +285,8 @@ if __name__ == "__main__":
     train_images = f"{coco_root}/2014_train_images/train2014"
     val_images = f"{coco_root}/2014_val_images/val2014"
     annotations = f"{coco_root}/2014_train_val_annotations/annotations"
-
     # Define device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     # Define a transform for the dataset
     transform = transforms.Compose([
         transforms.Resize((224, 224)),  # Resize to 224x224
@@ -214,13 +309,3 @@ if __name__ == "__main__":
         collate_fn=collate_fn
     )
 
-    # Initialize the model
-    model = AutoEncoder()
-
-    # Train the model
-    checkpoint_dir = "./checkpoints"
-    train_model(model, val_loader, val_loader, device, checkpoint_dir)
-
-    # Evaluate the model and save reconstructed images
-    eval_output_dir = "./reconstructed_images"
-    evaluate_model(model, val_loader, device, eval_output_dir)

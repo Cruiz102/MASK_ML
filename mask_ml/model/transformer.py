@@ -3,16 +3,12 @@
 import torch
 from torch import nn
 from torch import Tensor
-import numpy
 import torch.nn.functional as F
-import cv2
-import requests
 import math
-from typing import Optional, Union, Tuple, List, Literal
-from dataclasses import dataclass, field
-from typing import Optional, Literal
+from typing import Optional, Tuple
+from dataclasses import dataclass
 import logging
-
+from mask_ml.model.mlp import MLP
 # Configure logging
 transformer_logger = logging.getLogger("transformer")
 transformer_logger.setLevel(logging.DEBUG)
@@ -35,40 +31,7 @@ class TransformerConfig:
     rotary_relative_embeddings: bool = False
 
 
-class MLP(nn.Module):
-    def __init__(self, activation_function: str, input_size: int, output_size: int, hidden_sizes: Optional[List[int]] = None):
-        super(MLP, self).__init__()
-        if hidden_sizes:
-            layer_sizes = [input_size] + hidden_sizes + [output_size]
-        else:
-            layer_sizes = [input_size, output_size]
-        
-        # Initialize an empty ModuleList
-        self.layers = nn.ModuleList()
-        
-        # Create layers dynamically and add them to the ModuleList
-        for i in range(len(layer_sizes) - 1):
-            self.layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))
 
-        # Define the activation function based on the string input
-        if activation_function == "gelu":
-            self.activation = nn.GELU()
-        elif activation_function == "leaky_relu":
-            self.activation = nn.LeakyReLU()
-        elif activation_function == "relu":
-            self.activation = nn.ReLU()
-        else:
-            raise ValueError(f"Unsupported activation function: {activation_function}")
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # transformer_logger.debug("Running Transformer Forward Pass")
-        # transformer_logger.debug("Input Tensor Shape:", x.shape)
-        # Pass input through all layers except the last one with activation
-        for layer in self.layers[:-1]:
-            x = self.activation(layer(x))
-        
-        x = self.layers[-1](x)
-        return x
 
 
 # Copied from transformers.models.llama.modeling_llama.LlamaRotaryEmbedding with Llama->Phi
