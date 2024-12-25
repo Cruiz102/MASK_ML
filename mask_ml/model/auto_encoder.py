@@ -9,6 +9,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import instantiate
 from torch.optim.adamw import AdamW
+from mask_ml.utils.datasets import create_dataloader
 
 class ImageAutoEncoder(nn.Module):
     def __init__(self,
@@ -148,6 +149,7 @@ class Trainer:
         """Save the model checkpoint."""
         torch.save(self.model.state_dict(), save_path)
         print(f"Model checkpoint saved at {save_path}")
+
     def train_model(self, epochs):
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         for epoch in range(epochs):
@@ -159,11 +161,9 @@ class Trainer:
                 for images, _ in pbar:
                     images = images.to(device)
 
-                    # Forward pass
                     outputs = self.model(images)
                     loss = self.criterion(outputs, images)
 
-                    # Backward pass
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
@@ -210,27 +210,13 @@ def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.devi
 
     with torch.no_grad():
         for batch_idx, (images, _) in enumerate(tqdm(eval_loader, desc="Evaluating")):
-            # Move images to the device
             images = images.to(device)
 
-            # Forward pass
             outputs = model(images)
-
-            # Move outputs to CPU for saving
             images_cpu = images.cpu()
             outputs_cpu = outputs.cpu()
 
-            # Save original and reconstructed images
             for i in range(images_cpu.size(0)):
-                # If you applied normalization during preprocessing, you may need to unnormalize here
-                # For example:
-                # unnormalize = transforms.Normalize(
-                #     mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.225],
-                #     std=[1/0.229, 1/0.224, 1/0.225]
-                # )
-                # img = unnormalize(images_cpu[i])
-
-                # Convert tensors to PIL Images
                 original_image = transforms.ToPILImage()(images_cpu[i])
                 reconstructed_image = transforms.ToPILImage()(outputs_cpu[i])
 
@@ -247,33 +233,13 @@ def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.devi
 @hydra.main(version_base=None, config_path="config", config_name="training")
 def run_training(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
-    coco_root = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'coco')
-    val_images = f"{coco_root}/2014_val_images/val2014"
-    annotations = f"{coco_root}/2014_train_val_annotations/annotations"
-    # Define a transform for the dataset
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),  # Resize to 224x224
-        transforms.ToTensor(),          # Convert PIL images to tensors
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet stats
-    ])
 
-    dataset = CocoDetection(
-        root=val_images,
-        annFile=f"{annotations}/instances_val2014.json",
-        transform=transform
-    )
-    dataset_loader = DataLoader(
-        dataset,
-        batch_size=16,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        collate_fn=collate_fn
-    )
+
+    dataloader_train, dataloader_test = create_dataloader(cfg)
     model = instantiate(cfg.model)
     optimizer = AdamW(model.parameters(), lr=cfg.lr)
-    trainer = Trainer(model=model, optimizer=optimizer, dataloader= dataset_loader,
-                      criterion=,
+    trainer = Trainer(model=model, optimizer=optimizer, dataloader= dataloader_train,
+                      criterion=SparseAutoencoderCriterion(),
                       checkpoint_dir="./", device='cuda')
     
     trainer.train_model(cfg.epoch)

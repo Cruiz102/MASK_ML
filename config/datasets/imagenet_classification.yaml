@@ -1,7 +1,7 @@
 
 
 name: 'imagenet_classification'
-download: True
+download: True  
 base_dir: /sadf/adf
 imagenet_train:
     image_dir: /train

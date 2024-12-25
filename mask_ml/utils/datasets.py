@@ -13,35 +13,36 @@ import torchvision
 from omegaconf import DictConfig
 from typing import Union, Tuple
 
-# Assuming you have these dataset classes defined somewhere
-# from your_datasets_module import CocoSegmentationDataset, SA1BImageDataset
-
-def create_dataloader(cfg: DictConfig, train=True) -> Union[Tuple[DataLoader, DataLoader],DataLoader]:
-    dataset = cfg['datasets']
-    dataset_name = dataset['name']
-    image_dir = cfg['datasets']['base_dir']
-    batch_size = cfg['batch_size']
+# This function is to use in th train.py and eval.py of the project.
+def create_dataloader(cfg: DictConfig) -> Union[Tuple[DataLoader, DataLoader],DataLoader]:
+    dataset_name = cfg.get('datasets', {}).get('name')
+    batch_size = cfg.get('batch_size', 32) 
     shuffle = cfg.get('shuffle', False)
-    download = cfg.get('download', False)
-    image_size = cfg.get("image_reshape", 256)
-    
     # Select the appropriate dataset
-    if dataset_name == "coco":
-        dataset_train = CocoSegmentationDataset("annotation_dir", image_dir, download=download)
+    if dataset_name == "coco_segmentation":
+        image_size = cfg.get('datasets').get('image_size')
+        annotation_train_dir = cfg.get('datasets').get('annotation_train_dir')
+        annotation_test_dir = cfg.get('datasets').get('annotation_test_dir')
+        image_train_dir = cfg.get('datasets').get('image_train_dir')
+        image_test_dir = cfg.get('datasets').get('image_test_dir')
+        dataset_train = CocoSegmentationDataset(annotation_dir =annotation_train_dir , img_dir=image_train_dir,
+                                                image_size=(image_size,image_size))
+        dataset_test = CocoSegmentationDataset(annotation_dir =annotation_test_dir , img_dir=image_test_dir,
+                                                        image_size=(image_size,image_size))
     elif dataset_name == "sa1b":
-        dataset_train = SA1BImageDataset(image_dir, download=download)
+        dataset_train = SA1BImageDataset(image_dir)
     elif dataset_name =='imagenet_classification':
         dataset_train = torchvision.datasets.ImageNet(image_dir, split='val')
         
     elif dataset_name == 'cifar100_classification':
-        # Define the transformation to convert images to tensors and normalize
+        base_dir = cfg.get('datasets').get('base_dir')
         transform = transforms.Compose([
             transforms.ToTensor(),  # Convert PIL Image to Tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             transforms.Resize((image_size,image_size)),  # Resize the image to 64x64 pixels
         ])
-        dataset_train = torchvision.datasets.CIFAR100(image_dir, download=True, transform= transform)
-        dataset_test = torchvision.datasets.CIFAR100(image_dir, download=True,train=False,  transform= transform)
+        dataset_train = torchvision.datasets.CIFAR100(base_dir, download=True, transform= transform)
+        dataset_test = torchvision.datasets.CIFAR100(base_dir, download=True,train=False,  transform= transform)
 
     elif dataset_name == 'mnist_classification':
         transform = transforms.Compose([
@@ -58,8 +59,6 @@ def create_dataloader(cfg: DictConfig, train=True) -> Union[Tuple[DataLoader, Da
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=shuffle)
     dataloader_test = DataLoader(dataset=dataset_test, batch_size=batch_size, shuffle=shuffle)
     print(dataset_name, "This is the dataset name")
-    if not train:
-        return dataloader_test
     return (dataloader_train, dataloader_test)
 
 
@@ -69,9 +68,7 @@ class CocoSegmentationDataset(Dataset):
                  img_dir: str ,
                  image_size: tuple = (256, 256),
                  objects_num: int = 1,
-                 download = False
                  ):
-        self.download = download
         self.image_size = image_size
         self.coco_tool = COCO(annotation_dir)
         self.img_dir = img_dir
@@ -103,14 +100,6 @@ class CocoSegmentationDataset(Dataset):
         target_objects = list(range(self.objects_num))     
         target_objects = np.random.choice(target_objects, size=self.objects_num, replace=False)
 
-        if self.download:
-        #Check if the directory exists
-            if not os.path.exists(self.img_dir):
-                # If it does not exist, create it
-                # download_and_extract_files()
-                print(f"Directory '{self.img_dir}' created.")
-            else:
-                print(f"Directory '{self.img_dir}' already exists.")
 
         #FIXME: There is going to be an index access error if the number of annotations is less than self.objects_num
         for i in target_objects:

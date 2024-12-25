@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - datasets: mnist_classification  
+  - datasets: coco_segmentation  
   - model : vit_classification
   - override hydra/sweeper: optuna
 
@@ -18,10 +18,10 @@ hydra:
 
 output_dir: ./runs
 experiment_name: vit
+epochs: 1
 batch_size: 4
 learning_rate: 0.00002
 image_reshape: 32
-epochs: 1
 transfer_learning_weights: ""
 visualization:
   attention_heads: [1]

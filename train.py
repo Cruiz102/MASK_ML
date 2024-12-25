@@ -6,7 +6,6 @@ from mask_ml.utils.datasets import create_dataloader
 from mask_ml.model.vit import  VitClassificationConfig, VitClassificationHead
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 from mask_ml.model.mlp import MLPClassification, MLPClassificationConfig
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
