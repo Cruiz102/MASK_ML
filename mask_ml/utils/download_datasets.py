@@ -5,6 +5,7 @@ import zipfile
 import hashlib
 import json
 import logging
+from kaggle.api.kaggle_api_extended import KaggleApi
 
 logger = logging.getLogger('datasets_downloader')
 logging.basicConfig(
@@ -45,6 +46,36 @@ coco_datasets = [
 
 ]
 
+# Update kaggle_datasets to separate competitions and datasets
+kaggle_competitions = [
+    {
+        'name': 'imagenet-object-localization-challenge',
+        'description': 'ImageNet Object Localization Challenge'
+    },
+    {
+        'name': 'carvana-image-masking-challenge',
+        'description': 'Carvana Image Masking Challenge'
+    },
+    {
+        'name': 'pascal-voc-object-detection',
+        'description': 'Pascal VOC Object Detection Challenge'
+    }
+]
+
+kaggle_datasets = [
+    {
+        'name': 'mateuszbuda/lgg-mri-segmentation',
+        'description': 'Brain MRI segmentation'
+    },
+    {
+        'name': 'andrewmvd/car-plate-detection',
+        'description': 'License Plate Detection Dataset'
+    },
+    {
+        'name': 'andrewmvd/face-mask-detection',
+        'description': 'Face Mask Detection Dataset'
+    }
+]
 
 def unzip_file(zip_path, extract_to):
     logger.info(f"Unzipping {zip_path} to {extract_to}...")
@@ -156,15 +187,154 @@ def download_coco_dataset():
     logger.info("All operations complete!")
 
 
-# def download_sa1b_dataset():
-#     sa1b_links_file = os.path('..','..','datasets','sa1b.txt')
-#     with open(sa1b_links_file, 'r',) as f:
-#         data = f.read()
-#         for link in data.split():
-#             result = requests.get(link)
+def download_kaggle_competition(competition_name, save_dir):
+    """
+    Download a competition dataset from Kaggle.
+    
+    Args:
+        competition_name (str): Name of the competition
+        save_dir (str): Directory to save the dataset
+    """
+    try:
+        # Initialize the Kaggle API
+        api = KaggleApi()
+        api.authenticate()
+        
+        logger.info(f"Downloading competition dataset: {competition_name}")
+        api.competition_download_files(competition_name, path=save_dir, quiet=False)
+        
+        # Find and unzip the downloaded file
+        for file in os.listdir(save_dir):
+            if file.endswith('.zip'):
+                zip_path = os.path.join(save_dir, file)
+                unzip_file(zip_path, save_dir)
+                break
+                
+        logger.info(f"Successfully downloaded and extracted competition data: {competition_name}")
+        
+    except Exception as e:
+        logger.error(f"Error downloading from Kaggle: {str(e)}")
+        logger.info("\nTo set up Kaggle API credentials:")
+        logger.info("1. Go to https://www.kaggle.com/settings")
+        logger.info("2. Click on 'Create New API Token' to download kaggle.json")
+        logger.info("3. Run these commands:")
+        logger.info("   mkdir -p ~/.kaggle")
+        logger.info("   mv path/to/downloaded/kaggle.json ~/.kaggle/")
+        logger.info("   chmod 600 ~/.kaggle/kaggle.json")
 
+def select_and_download_dataset():
+    """
+    Main function to select and download datasets from different sources
+    """
+    logger.info("\nSelect dataset source:")
+    logger.info("1: COCO Datasets")
+    logger.info("2: Kaggle Competitions")
+    logger.info("3: Kaggle Datasets")
+    
+    while True:
+        try:
+            source = int(input("\nEnter your choice (1, 2, or 3): "))
+            if source in [1, 2, 3]:
+                break
+            logger.info("Please enter 1, 2, or 3")
+        except ValueError:
+            logger.info("Please enter a valid number")
 
+    if source == 1:
+        download_coco_dataset()
+    elif source == 2:
+        select_and_download_kaggle_competition()
+    else:
+        select_and_download_kaggle_dataset()
 
-# Run the script
+def select_and_download_kaggle_competition():
+    """
+    Function to select and download a specific Kaggle competition dataset
+    """
+    logger.info("\nAvailable Kaggle competitions:")
+    for i, competition in enumerate(kaggle_competitions, 1):
+        logger.info(f"{i}: {competition['description']} ({competition['name']})")
+    
+    while True:
+        try:
+            choice = int(input("\nEnter the number of the competition dataset you want to download: "))
+            if 1 <= choice <= len(kaggle_competitions):
+                break
+            logger.info(f"Please enter a number between 1 and {len(kaggle_competitions)}")
+        except ValueError:
+            logger.info("Please enter a valid number")
+
+    selected_competition = kaggle_competitions[choice - 1]
+    
+    # Create datasets directory if it doesn't exist
+    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'kaggle_competitions')
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    # Create specific directory for the selected competition
+    competition_dir = os.path.join(dataset_dir, selected_competition['name'])
+    os.makedirs(competition_dir, exist_ok=True)
+    
+    # Download the competition dataset
+    logger.info(f"\nDownloading {selected_competition['description']}...")
+    download_kaggle_competition(selected_competition['name'], competition_dir)
+
+def select_and_download_kaggle_dataset():
+    """
+    Function to select and download a specific Kaggle dataset
+    """
+    logger.info("\nAvailable Kaggle datasets:")
+    for i, dataset in enumerate(kaggle_datasets, 1):
+        logger.info(f"{i}: {dataset['description']} ({dataset['name']})")
+    
+    while True:
+        try:
+            choice = int(input("\nEnter the number of the dataset you want to download: "))
+            if 1 <= choice <= len(kaggle_datasets):
+                break
+            logger.info(f"Please enter a number between 1 and {len(kaggle_datasets)}")
+        except ValueError:
+            logger.info("Please enter a valid number")
+
+    selected_dataset = kaggle_datasets[choice - 1]
+    
+    # Create datasets directory if it doesn't exist
+    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'kaggle')
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    # Create specific directory for the selected dataset
+    dataset_specific_dir = os.path.join(dataset_dir, selected_dataset['name'].split('/')[-1])
+    os.makedirs(dataset_specific_dir, exist_ok=True)
+    
+    # Download the dataset
+    logger.info(f"\nDownloading {selected_dataset['description']}...")
+    download_kaggle_dataset(selected_dataset['name'], dataset_specific_dir)
+
+def download_kaggle_dataset(dataset_name, save_dir):
+    """
+    Download a dataset from Kaggle.
+    
+    Args:
+        dataset_name (str): Name of the dataset in format 'owner/dataset-name'
+        save_dir (str): Directory to save the dataset
+    """
+    try:
+        api = KaggleApi()
+        api.authenticate()
+        
+        logger.info(f"Downloading {dataset_name} from Kaggle...")
+        api.dataset_download_files(dataset_name, path=save_dir, unzip=True)
+        logger.info(f"Successfully downloaded and extracted {dataset_name}")
+        
+    except Exception as e:
+        logger.error(f"Error downloading from Kaggle: {str(e)}")
+        logger.info("\nTo set up Kaggle API credentials:")
+        logger.info("1. Go to https://www.kaggle.com/settings")
+        logger.info("2. Click on 'Create New API Token' to download kaggle.json")
+        logger.info("3. Run these commands:")
+        logger.info("   mkdir -p ~/.kaggle")
+        logger.info("   mv path/to/downloaded/kaggle.json ~/.kaggle/")
+        logger.info("   chmod 600 ~/.kaggle/kaggle.json")
+
+# Update the main block to use the new selection function
 if __name__ == "__main__":
-    download_coco_dataset()
+    select_and_download_dataset()

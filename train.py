@@ -1,11 +1,11 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
-import torch.nn as nn
 from mask_ml.utils.datasets import create_dataloader
-from mask_ml.model.vit import  VitClassificationConfig, VitClassificationHead
-from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
-from mask_ml.model.mlp import MLPClassification, MLPClassificationConfig
+from mask_ml.model.vit import   VitClassificationHead
+from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder
+from mask_ml.model.mlp import MLPClassification
+from mask_ml.model.auto_encoder import ImageAutoEncoder
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
@@ -29,29 +29,18 @@ def run_training(cfg: DictConfig):
     os.makedirs(output_dir, exist_ok=True)
     experiment_dir = create_unique_experiment_dir(output_dir, experiment_name)
     
-    model_config = instantiate(cfg.model)
+    model = instantiate(cfg.model)
 
-    if isinstance(model_config, MLPClassificationConfig):
-        model = MLPClassification(model_config)
-
-    if isinstance(model_config, VitClassificationConfig):
-        model = VitClassificationHead(model_config)
-
-    elif isinstance(model_config, SegmentationAutoEncoderConfig):
-        model = SegmentationAutoEncoder(model_config)
-
-    else:
-        raise ValueError(f"Unsupported model config type: {type(model_config)}")
 
     if cfg.transfer_learning_weights:
         state_dict = torch.load(cfg.transfer_learning_weights, weights_only=True)
-        model.load_state_dict(state_dict)  # Load weights into the instantiated model
-
+        model.load_state_dict(state_dict)
 
     model = model.to(device)
 
     optimizer = AdamW(model.parameters(), lr=lr)
-    criterion = nn.CrossEntropyLoss()
+    
+    criterion = instantiate(cfg.loss_function)
 
     loss_file = os.path.join(experiment_dir, "step_losses.csv")
     training_data_file = os.path.join(experiment_dir, 'training_data.txt')
@@ -95,7 +84,7 @@ def run_training(cfg: DictConfig):
             torch.save(model.state_dict(), model_save_path)
             print(f"Model saved at {model_save_path}")
 
-            validation_test(output_path=experiment_dir, model=model, dataloader=dataloader_test, attentions_heads=[1])
+            validation_test(output_path=experiment_dir, model=model, dataloader=dataloader_test, attentions_heads_idx=cfg.attention_heads)
 
     except KeyboardInterrupt:
         print("Training interrupted. Saving latest model weights...")

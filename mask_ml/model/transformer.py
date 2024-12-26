@@ -1,5 +1,3 @@
-
-
 import torch
 from torch import nn
 from torch import Tensor
@@ -110,41 +108,53 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self,config: TransformerConfig, rotational_embeddings = False):
-        super(MultiHeadAttention,self).__init__()
-        self.config = config
-        self.rotational_embeddings = rotational_embeddings
-        self.flash = False
-        self.c_attn = nn.Linear(config.embedded_size, 3 * config.embedded_size, bias=False)
-        self.c_proj = nn.Linear(config.embedded_size,  config.embedded_size, bias=True)
-        self.attn_dropout = nn.Dropout(0.1)
-        self.resid_dropout = nn.Dropout(0.1)
-
+    def __init__(
+        self,
+        embedded_size: int = 200,
+        attention_heads: int = 5,
+        dropout_prob: float = 0.2,
+        flash_attention: bool = False,
+        rotary_relative_embeddings: bool = False
+    ):
+        super(MultiHeadAttention, self).__init__()
+        self.embedded_size = embedded_size
+        self.attention_heads = attention_heads
+        self.flash_attention = flash_attention
+        self.rotational_embeddings = rotary_relative_embeddings
+        self.dropout_prob = dropout_prob
+        
+        self.c_attn = nn.Linear(embedded_size, 3 * embedded_size, bias=False)
+        self.c_proj = nn.Linear(embedded_size, embedded_size, bias=True)
+        self.attn_dropout = nn.Dropout(dropout_prob)
+        self.resid_dropout = nn.Dropout(dropout_prob)
 
         if self.rotational_embeddings:
-            self.rot_embeddings = RotaryEmbedding(config.embedded_size)
+            self.rot_embeddings = RotaryEmbedding(embedded_size)
 
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
     def forward(self, x, position_ids: Optional[Tensor] = None)-> Tuple[Tensor, Tensor]:
         B, Seq, n_embd = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v   = self.c_attn(x).split(self.config.embedded_size, dim=2)
-        k = k.view(B, Seq, self.config.attention_heads, n_embd // self.config.attention_heads).transpose(1, 2) # (B,    , T, hs)
-        q = q.view(B, Seq, self.config.attention_heads, n_embd // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, Seq, self.config.attention_heads, n_embd // self.config.attention_heads).transpose(1, 2) # (B, nh, T, hs)
+        q, k, v   = self.c_attn(x).split(self.embedded_size, dim=2)
+        k = k.view(B, Seq, self.attention_heads, n_embd // self.attention_heads).transpose(1, 2) # (B,    , T, hs)
+        q = q.view(B, Seq, self.attention_heads, n_embd // self.attention_heads).transpose(1, 2) # (B, nh, T, hs)
+        v = v.view(B, Seq, self.attention_heads, n_embd // self.attention_heads).transpose(1, 2) # (B, nh, T, hs)
 
-
-        # Get the positional relative embeddings with  RoPE:
+        # Get the positional relative embeddings with RoPE:
         if self.rotational_embeddings:
             cos, sin = self.rot_embeddings(x)
             q, k = apply_rotary_pos_emb(q, k, cos, sin, position_ids)
 
-
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.config.flash_attention:
+        if self.flash_attention:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v, 
+                attn_mask=None, 
+                dropout_p=self.dropout_prob if self.training else 0,
+                is_causal=True
+            )
             att = y
         else:
             # manual implementation of attention
@@ -164,13 +174,29 @@ class MultiHeadAttention(nn.Module):
 
     
 class TransformerBlock(nn.Module):
-    def __init__(self, config: TransformerConfig):
+    def __init__(
+        self,
+        embedded_size: int = 200,
+        attention_heads: int = 5,
+        mlp_hidden_size: int = 2,
+        mlp_layers: int = 2,
+        activation_function: str = "relu",
+        dropout_prob: float = 0.2,
+        flash_attention: bool = False,
+        rotary_relative_embeddings: bool = False
+    ):
         super(TransformerBlock, self).__init__()
-        self.attention = MultiHeadAttention(config=config)
-        self.norm_layer_1 = nn.LayerNorm(config.embedded_size)
-        self.norm_layer_2 = nn.LayerNorm(config.embedded_size)
-        hidden_layers = [config.mlp_hidden_size for _ in range(config.mlp_layers) ]
-        self.feed_forward = MLP("relu", config.embedded_size, config.embedded_size,hidden_layers)
+        self.attention = MultiHeadAttention(
+            embedded_size=embedded_size,
+            attention_heads=attention_heads,
+            dropout_prob=dropout_prob,
+            flash_attention=flash_attention,
+            rotary_relative_embeddings=rotary_relative_embeddings
+        )
+        self.norm_layer_1 = nn.LayerNorm(embedded_size)
+        self.norm_layer_2 = nn.LayerNorm(embedded_size)
+        hidden_layers = [mlp_hidden_size for _ in range(mlp_layers)]
+        self.feed_forward = MLP(activation_function, embedded_size, embedded_size, hidden_layers)
     def forward(self, x: Tensor) -> Tuple[Tensor,Tensor]:
         y,attention_head = self.attention(self.norm_layer_1(x))
         y  += x

@@ -1,2 +1,2 @@
 name: 'mnist_classification'
-base_dir: ./
+base_dir: ./datasets

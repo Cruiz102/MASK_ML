@@ -1,9 +1,0 @@
-
-coco:
-  download: True
-  base_dir: ./downloads/coco
-
-    
-sa1b:
-  download: False
-  base_dir: /asdf/ads

@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.datasets import CocoDetection
 from tqdm import tqdm
 import os
 import hydra
@@ -226,3 +225,23 @@ def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.devi
 
 
 
+
+
+@hydra.main(version_base=None, config_path="config", config_name="autoencoder_training")
+def run_training(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg))
+
+
+    dataloader_train, dataloader_test = create_dataloader(cfg)
+    model = instantiate(cfg.model)
+    optimizer = AdamW(model.parameters(), lr=cfg.lr)
+    trainer = Trainer(model=model, optimizer=optimizer, dataloader= dataloader_train,
+                      criterion=SparseAutoencoderCriterion(),
+                      checkpoint_dir="./", device='cuda')
+    
+    trainer.train_model(cfg.epoch)
+    
+
+
+if __name__ == "__main__":
+    run_training()

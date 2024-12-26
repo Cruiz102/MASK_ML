@@ -1,19 +1,22 @@
+_target_: "mask_ml.model.vit.VitClassificationHead"
 
-
-_target_: "mask_ml.model.vit.VitClassificationConfig"
-input_size: 784
+# VitClassificationHead specific parameters
+input_size: 384
 num_classes: 10
-model_config:
-    _target_: "mask_ml.model.vit.ViTConfig"
-    transformer_blocks: 1
-    image_size: 32
-    patch_size: 16
-    num_channels: 1
-    encoder_stride: 4
-    positional_embedding: "sinusoidal"
-    embedded_size: 784
-    attention_heads: 4
-    mlp_hidden_size: 3072
-    mlp_layers: 2
-    activation_function: "relu"
-    dropout_prob: 0.1
+
+# VitModel parameters
+transformer_blocks: 6
+image_size: 28
+patch_size: 7
+num_channels: 1
+encoder_stride: 7
+embedded_size: 384
+attention_heads: 6
+mlp_hidden_size: 1536
+mlp_layers: 2
+activation_function: "gelu"
+dropout_prob: 0.1
+
+# Optional parameters
+positional_embedding: "learned"
+flash_attention: true  # If your hardware supports it

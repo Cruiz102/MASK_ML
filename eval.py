@@ -2,7 +2,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 from mask_ml.utils.datasets import create_dataloader
 from mask_ml.model.vit import VitClassificationHead, VitClassificationConfig
-from mask_ml.model.mlp import MLPClassification, MLPClassificationConfig
+from mask_ml.model.mlp import MLPClassification
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
 import os
 from typing import List, Optional

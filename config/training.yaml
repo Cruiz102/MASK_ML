@@ -1,7 +1,8 @@
 defaults:
   - _self_
-  - datasets: coco_segmentation  
+  - datasets: mnist_classification
   - model : vit_classification
+  # - loss_function: cross_entropy
   - override hydra/sweeper: optuna
 
 hydra:
@@ -15,7 +16,7 @@ hydra:
       mlp_hidden_size: range(1024, 4096)  # Search space for MLP hidden size
       dropout_prob: interval(0.0, 0.5)  # Search space for dropout probability
 
-
+# Experiment
 output_dir: ./runs
 experiment_name: vit
 epochs: 1
@@ -23,5 +24,14 @@ batch_size: 4
 learning_rate: 0.00002
 image_reshape: 32
 transfer_learning_weights: ""
-visualization:
-  attention_heads: [1]
+
+# Direct PyTorch loss function instantiation
+loss_function:
+  _target_: torch.nn.CrossEntropyLoss
+  # Optional parameters can be added here:
+  # label_smoothing: 0.1
+  # reduction: "mean"
+  # weight: null
+
+attention_heads: [0]  # Indices of attention heads to visualize
+num_batches: 3  # Number of random batches to visualize

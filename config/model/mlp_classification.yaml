@@ -1,7 +1,6 @@
-
-_target_: "mask_ml.model.mlp.MLPClassificationConfig"  
+_target_: mask_ml.model.mlp.MLPClassification
 num_classes: 10
-input_size: 1024
-hidden_size : 100
+input_size: 784
+hidden_size: 100
 num_layers: 5
-sigmoid_output: True
+sigmoid_output: true
