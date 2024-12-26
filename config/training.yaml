@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - datasets: mnist_classification
-  - model : vit_classification
-  # - loss_function: cross_entropy
+  - model: vit_classification
+  - loss_function: cross_entropy
   - override hydra/sweeper: optuna
 
 hydra:
@@ -25,13 +25,6 @@ learning_rate: 0.00002
 image_reshape: 32
 transfer_learning_weights: ""
 
-# Direct PyTorch loss function instantiation
-loss_function:
-  _target_: torch.nn.CrossEntropyLoss
-  # Optional parameters can be added here:
-  # label_smoothing: 0.1
-  # reduction: "mean"
-  # weight: null
-
+# Visualization
 attention_heads: [0]  # Indices of attention heads to visualize
 num_batches: 3  # Number of random batches to visualize

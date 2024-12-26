@@ -3,7 +3,7 @@ _target_: "mask_ml.model.auto_encoder.ImageAutoEncoder"
 image_encoder:
   _target_: "mask_ml.model.mlp.MLP"
   activation_function: "relu"
-  input_size: 3072  # For 32x32 RGB images (3 * 32 * 32)
+  input_size: 784  # For 32x32 RGB images (3 * 32 * 32)
   output_size: 128  # Latent dimension
   hidden_sizes: [1024, 512, 256]
 
@@ -11,9 +11,9 @@ decoder:
   _target_: "mask_ml.model.mlp.MLP"
   activation_function: "relu"
   input_size: 128   # Should match encoder's output_size
-  output_size: 3072 # Should match encoder's input_size
+  output_size: 784 # Should match encoder's input_size
   hidden_sizes: [256, 512, 1024]
 
-image_size: 32
+image_size: 28
 flatten: true
 

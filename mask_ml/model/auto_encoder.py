@@ -5,11 +5,7 @@ from torchvision import transforms
 from torchvision.datasets import CocoDetection
 from tqdm import tqdm
 import os
-import hydra
-from omegaconf import DictConfig, OmegaConf
-from hydra.utils import instantiate
-from torch.optim.adamw import AdamW
-from mask_ml.utils.datasets import create_dataloader
+
 
 class ImageAutoEncoder(nn.Module):
     def __init__(self,
@@ -25,12 +21,21 @@ class ImageAutoEncoder(nn.Module):
         self.image_size = image_size
         self.flatten = flatten 
     def forward(self, x):
+        batch_size = x.shape[0]
+        original_shape = x.shape  # Store the original shape
+        
         if self.flatten:
-            #TENSOR_SIZE: [BATCH,CHANNEL, IMAGE_SIZE, IMAGE_SIZE] 
-            x = x.flatten(2)  # Flatten -> [BATCH, CHANNEL, IMAGE_SIZE * IMAGE_SIZE]
-        x = self.image_encoder(x)
-        x = self.decoder(x)
-        return x
+            x = x.view(batch_size, -1)
+        
+        # Encode and decode
+        latent = self.image_encoder(x)
+        reconstructed = self.decoder(latent)
+        
+        # Reshape back to original dimensions if flattened
+        if self.flatten:
+            reconstructed = reconstructed.view(original_shape)
+        
+        return reconstructed
     
 
 class SparseAutoencoderCriterion(nn.Module):

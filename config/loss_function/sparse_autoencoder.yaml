@@ -1,0 +1,3 @@
+_target_: mask_ml.model.auto_encoder.SparseAutoencoderCriterion
+beta: 1.0
+sparsity_target: 0.05 

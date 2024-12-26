@@ -1,0 +1,2 @@
+_target_: mask_ml.model.auto_encoder.ContractiveAutoencoderCriterion
+lambda_reg: 1.0 

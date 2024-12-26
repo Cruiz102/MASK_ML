@@ -1,0 +1,3 @@
+_target_: torch.nn.MSELoss
+# Optional parameters
+reduction: "mean"  # Options: "none" | "mean" | "sum" 

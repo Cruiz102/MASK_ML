@@ -1,11 +1,12 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from mask_ml.utils.datasets import create_dataloader
-from mask_ml.model.vit import VitClassificationHead, VitClassificationConfig
+from mask_ml.model.vit import VitClassificationHead
 from mask_ml.model.mlp import MLPClassification
-from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder, SegmentationAutoEncoderConfig
+from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder
+from mask_ml.model.auto_encoder import ImageAutoEncoder
 import os
-from typing import List, Optional
+from typing import List
 from torchvision.transforms.functional import to_pil_image
 import time
 import csv
@@ -16,10 +17,15 @@ from hydra.utils import instantiate
 import random
 # Data loading
 from utils import create_unique_experiment_dir, visualize_attention_heads
+import torch.nn.functional as F
+from torchvision.utils import save_image
+import matplotlib.pyplot as plt
+import numpy as np
 
 class Tasks(Enum):
     CLASSIFICATION = 1
     SEGMENTATION = 2
+    AUTOENCODER = 3  # Added new task type
 
 def validation_test(
     output_path: str, 
@@ -40,7 +46,7 @@ def validation_test(
     :return: Average classification accuracy (for classification models). 
              For segmentation models, you can replace or append metrics as needed.
     """
-    model.eval()  # Set the model to evaluation mode
+    model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
@@ -48,17 +54,29 @@ def validation_test(
     num_batches = len(dataloader)
 
     # Distinguish the task based on the model's type
-    if isinstance(model, SegmentationAutoEncoder):
-        task = Tasks.SEGMENTATION
-    elif isinstance(model, VitClassificationHead) or isinstance(model, MLPClassification):
+    if isinstance(model, VitClassificationHead):
         task = Tasks.CLASSIFICATION
+    elif isinstance(model, MLPClassification):
+        task = Tasks.CLASSIFICATION
+    elif isinstance(model, SegmentationAutoEncoder):
+        task = Tasks.SEGMENTATION
+    elif isinstance(model, ImageAutoEncoder):  # Check if it's an autoencoder
+        task = Tasks.AUTOENCODER
     else:
         raise ValueError("Unknown model type provided to validation_test.")
 
-    if attentions_heads_idx:     
-        os.makedirs(output_path, exist_ok=True)
+    # Create directories for results
+    os.makedirs(output_path, exist_ok=True)
+    if attentions_heads_idx:
         attention_dir = os.path.join(output_path, "attention_heads")
         os.makedirs(attention_dir, exist_ok=True)
+    if task == Tasks.AUTOENCODER:
+        reconstruction_dir = os.path.join(output_path, "reconstructions")
+        os.makedirs(reconstruction_dir, exist_ok=True)
+
+    # Initialize metrics tracking
+    total_loss = 0.0
+    reconstruction_samples = []
 
     # Randomly select batch indices to visualize
     total_batches = len(dataloader)
@@ -66,9 +84,6 @@ def validation_test(
 
     all_true_labels = []
     all_predicted_labels = []
-
-
-
 
     if log:
         os.makedirs(output_path, exist_ok=True)
@@ -83,65 +98,90 @@ def validation_test(
 
         for batch_idx, (inputs, labels) in enumerate(tqdm(dataloader, desc="Evaluating", leave=False)):
             start_time = time.time()
-
             inputs = inputs.to(device)
             labels = labels.to(device)
-            # Visualize attention heads for randomly sampled batches
-            if batch_idx in sampled_batch_indices and attentions_heads_idx and isinstance(model, VitClassificationHead):
-                outputs, attention_heads = model(inputs, attentions_heads_idx)
-                # Save input images
-                batch_dir = os.path.join(attention_dir, f"batch_{batch_idx}")
-                os.makedirs(batch_dir, exist_ok=True)
-                for i in range(inputs.size(0)):
-                    input_image = to_pil_image(inputs[i].cpu())
-                    input_image_path = os.path.join(batch_dir, f"input_image_{i}.png")
-                    input_image.save(input_image_path)
 
-                # Visualize attention heads
-                visualize_attention_heads(attention_heads, os.path.join(batch_dir, "attention_maps"))
+            if task == Tasks.AUTOENCODER:
+                # Forward pass for autoencoder
+                reconstructed = model(inputs)
+                loss = F.mse_loss(reconstructed, inputs)
+                total_loss += loss.item()
+                metric_score = loss.item()  # Use reconstruction loss as metric
 
-                # Save metadata
-                metadata_path = os.path.join(batch_dir, "metadata.txt")
-                with open(metadata_path, "w") as metadata_file:
-                    metadata_file.write(f"Batch Index: {batch_idx}\n")
-                    metadata_file.write(f"Batch Size: {inputs.size(0)}\n")
-                    metadata_file.write(f"Attention Heads: {attentions_heads_idx}\n")
-                    metadata_file.write(f"Labels: {labels.cpu().tolist()}\n")
-            elif isinstance(model, VitClassificationHead):
-                outputs,_ = model(inputs)
+                # Save reconstruction samples
+                if batch_idx < samples_heads_indices_size:
+                    # Save original and reconstructed images
+                    comparison = torch.cat([inputs[:8], reconstructed[:8]])
+                    save_image(comparison.cpu(),
+                             os.path.join(reconstruction_dir, f'reconstruction_{batch_idx}.png'),
+                             nrow=8)
+                    
+                    # Calculate and save reconstruction error heatmap
+                    reconstruction_error = (inputs - reconstructed).abs()
+                    error_map = reconstruction_error.mean(dim=1)  # Average across channels
+                    for i in range(min(8, error_map.size(0))):
+                        plt.figure(figsize=(10, 4))
+                        plt.imshow(error_map[i].cpu().numpy(), cmap='hot')
+                        plt.colorbar()
+                        plt.title(f'Reconstruction Error Heatmap - Batch {batch_idx}, Sample {i}')
+                        plt.savefig(os.path.join(reconstruction_dir, f'error_heatmap_b{batch_idx}_s{i}.png'))
+                        plt.close()
+
             else:
-                outputs = model(inputs)
+                # Handle existing classification and attention visualization logic
+                if batch_idx in sampled_batch_indices and attentions_heads_idx and isinstance(model, VitClassificationHead):
+                    outputs, attention_heads = model(inputs, attentions_heads_idx)
+                    # Save input images and visualize attention heads (existing code)
+                    batch_dir = os.path.join(attention_dir, f"batch_{batch_idx}")
+                    os.makedirs(batch_dir, exist_ok=True)
+                    for i in range(inputs.size(0)):
+                        input_image = to_pil_image(inputs[i].cpu())
+                        input_image_path = os.path.join(batch_dir, f"input_image_{i}.png")
+                        input_image.save(input_image_path)
 
-            if task == Tasks.CLASSIFICATION:
-                _, predicted = torch.max(outputs, 1)
-                all_true_labels.extend(labels.cpu().numpy())
-                all_predicted_labels.extend(predicted.cpu().numpy())
-                metric_score = (predicted == labels).float().mean().item()
-                total_score += metric_score
+                    visualize_attention_heads(attention_heads, os.path.join(batch_dir, "attention_maps"))
 
-            elif task == Tasks.SEGMENTATION:
-                # For segmentation, you'd typically compute IoU, Dice, etc.
-                # This is just a placeholder.
-                # Example: let's do a trivial "score" of 1.0 for each batch (not real metric)
-                metric_score = 1.0  
-                total_score += metric_score
-            else:
-                metric_score = 0.0  # fallback if needed
+                    metadata_path = os.path.join(batch_dir, "metadata.txt")
+                    with open(metadata_path, "w") as metadata_file:
+                        metadata_file.write(f"Batch Index: {batch_idx}\n")
+                        metadata_file.write(f"Batch Size: {inputs.size(0)}\n")
+                        metadata_file.write(f"Attention Heads: {attentions_heads_idx}\n")
+                        metadata_file.write(f"Labels: {labels.cpu().tolist()}\n")
+                elif isinstance(model, VitClassificationHead):
+                    outputs, _ = model(inputs)
+                else:
+                    outputs = model(inputs)
 
-            # Log the data
+                if task == Tasks.CLASSIFICATION:
+                    _, predicted = torch.max(outputs, 1)
+                    all_true_labels.extend(labels.cpu().numpy())
+                    all_predicted_labels.extend(predicted.cpu().numpy())
+                    metric_score = (predicted == labels).float().mean().item()
+                    total_score += metric_score
+                elif task == Tasks.SEGMENTATION:
+                    metric_score = 1.0  # placeholder for segmentation metric
+                    total_score += metric_score
+
+            # Log results
             end_time = time.time()
             elapsed_time = end_time - start_time
             if log:
                 writer.writerow([
-                    batch_idx, 
-                    f"{metric_score:.4f}", 
-                    f"{elapsed_time:.6f}", 
-                    list(outputs.shape)
+                    batch_idx,
+                    f"{metric_score:.4f}",
+                    f"{elapsed_time:.6f}",
+                    list(outputs.shape if task != Tasks.AUTOENCODER else reconstructed.shape)
                 ])
 
-    avg_score = total_score / num_batches if num_batches > 0 else 0
-    print(f"Validation complete. Average metric score: {avg_score:.4f}")
-    return avg_score
+    # Calculate and return final metrics
+    if task == Tasks.AUTOENCODER:
+        avg_loss = total_loss / num_batches
+        print(f"Validation complete. Average reconstruction loss: {avg_loss:.4f}")
+        return avg_loss
+    else:
+        avg_score = total_score / num_batches if num_batches > 0 else 0
+        print(f"Validation complete. Average metric score: {avg_score:.4f}")
+        return avg_score
 
 
 @hydra.main(version_base=None, config_path="config", config_name="evaluation")
@@ -163,17 +203,8 @@ def run_evaluation(cfg: DictConfig):
     os.makedirs(base_output_dir, exist_ok=True)
     experiment_dir = create_unique_experiment_dir(base_output_dir, experiment_name)
 
-    # Instantiate the model based on configuration
-    model_config = instantiate(cfg.model)
-
-    if isinstance(model_config, VitClassificationConfig):
-        model = VitClassificationHead(model_config)
-    elif isinstance(model_config, SegmentationAutoEncoderConfig):
-        model = SegmentationAutoEncoder(model_config)
-    elif isinstance(model_config, MLPClassificationConfig):
-        model = MLPClassification(model_config)
-    else:
-        raise ValueError(f"Unsupported model type: {type(model_config)}")
+    # Instantiate the model directly using hydra
+    model = instantiate(cfg.model)
 
     # Load transfer learning weights if specified
     if cfg.get("transfer_learning_weights"):

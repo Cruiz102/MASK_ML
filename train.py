@@ -4,8 +4,6 @@ import torch
 from mask_ml.utils.datasets import create_dataloader
 from mask_ml.model.vit import   VitClassificationHead
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder
-from mask_ml.model.mlp import MLPClassification
-from mask_ml.model.auto_encoder import ImageAutoEncoder
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test

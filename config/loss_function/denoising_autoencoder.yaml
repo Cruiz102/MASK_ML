@@ -1,0 +1,2 @@
+_target_: mask_ml.model.auto_encoder.DenoisingAutoencoderCriterion
+noise_std: 0.1 
