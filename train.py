@@ -4,6 +4,7 @@ import torch
 from mask_ml.utils.datasets import create_dataloader
 from mask_ml.model.vit import   VitClassificationHead
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder
+from mask_ml.model.auto_encoder import ImageAutoEncoder
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
@@ -69,7 +70,11 @@ def run_training(cfg: DictConfig):
                     y,_ = model(inputs)
                 else:
                     y = model(inputs)
-                loss = criterion(y, labels)
+                
+                if isinstance(model, ImageAutoEncoder):
+                    loss = criterion(y, inputs)
+                else:
+                    loss = criterion(y, labels)
                 loss.backward()
                 optimizer.step()
                 step_losses.append(loss.item())
@@ -82,7 +87,8 @@ def run_training(cfg: DictConfig):
             torch.save(model.state_dict(), model_save_path)
             print(f"Model saved at {model_save_path}")
 
-            validation_test(output_path=experiment_dir, model=model, dataloader=dataloader_test, attentions_heads_idx=cfg.attention_heads)
+            validation_test(output_path=experiment_dir, model=model, dataloader=dataloader_test, attentions_heads_idx=cfg.attention_heads,
+                            samples_heads_indices_size=3)
 
     except KeyboardInterrupt:
         print("Training interrupted. Saving latest model weights...")

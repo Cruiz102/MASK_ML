@@ -1,11 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from torchvision import transforms
-from torchvision.datasets import CocoDetection
-from tqdm import tqdm
-import os
-
 
 class ImageAutoEncoder(nn.Module):
     def __init__(self,
@@ -37,6 +31,105 @@ class ImageAutoEncoder(nn.Module):
         
         return reconstructed
     
+
+class MaskPatchEncoder(nn.Module):
+    def __init__(self, mask_ratio: float = 0.75,
+                 mask_strag: str = "random",
+                 image_size: int = 256,
+                 patch_size: int = 16,
+                 num_channels: int = 3,
+                 embedded_size: int = 200,
+                 interpolation: bool = False,
+                 interpolation_scale: int = 1
+                 ):
+        super(MaskPatchEncoder, self).__init__()
+        # Save parameters
+        self.mask_ratio = mask_ratio
+        self.mask_strag = mask_strag
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.num_channels = num_channels
+        self.embedded_size = embedded_size
+        self.interpolation = interpolation
+        self.interpolation_scale = interpolation_scale
+        
+        # Calculate number of patches
+        self.num_patches = (image_size // patch_size) ** 2
+        
+        # Create patch embedding layer
+        self.patch_embed = nn.Conv2d(
+            in_channels=num_channels,
+            out_channels=embedded_size,
+            kernel_size=patch_size,
+            stride=patch_size
+        )
+        
+        # Position embeddings for patches
+        self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches, embedded_size))
+        nn.init.normal_(self.pos_embed, std=0.02)
+
+    def forward(self, x):
+        # Embed patches
+        x = self.patch_embed(x).flatten(2).transpose(1, 2)
+        x = x + self.pos_embed
+
+        # Randomly mask patches
+        num_masked = int(self.num_patches * self.mask_ratio)
+        indices = torch.randperm(self.num_patches)
+        masked_indices = indices[:num_masked]
+        unmasked_indices = indices[num_masked:]
+
+        # Mask out the patches
+        mask = torch.zeros(self.num_patches, dtype=torch.bool)
+        mask[masked_indices] = True
+
+        return x[:, ~mask, :], masked_indices, unmasked_indices
+
+
+class MaskedAutoEncoder(nn.Module):
+    def __init__(self,
+                 encoder: nn.Module,
+                 decoder: nn.Module):
+        super(MaskedAutoEncoder, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.mask_token = nn.Parameter(torch.zeros(1, encoder.embedded_size))
+        self.patch_encoder = MaskPatchEncoder(mask_ratio=0.75, 
+                                              image_size=256, 
+                                              patch_size=16, 
+                                              num_channels=3, 
+                                              embedded_size=encoder.embedded_size)
+
+    def forward(self, x):
+        # Pass through patch encoder
+        patch_embeddings, masked_indices, unmasked_indices = self.patch_encoder(x)
+
+        # Pass visible patches through the encoder
+        encoded_visible = self.encoder(patch_embeddings)
+
+        # Prepare decoder input
+        batch_size, num_patches, d_model = x.shape[0], self.patch_encoder.num_patches, self.patch_encoder.embedded_size
+        full_decoder_input = torch.zeros((batch_size, num_patches, d_model), device=x.device)
+        full_decoder_input[:, unmasked_indices, :] = encoded_visible
+        full_decoder_input[:, masked_indices, :] = self.mask_token.unsqueeze(0).repeat(batch_size, len(masked_indices), 1)
+
+        # Add positional encoding (reuse patch encoder's positional encoding)
+        full_decoder_input += self.patch_encoder.pos_embed
+
+        # Pass through decoder
+        reconstructed_patches = self.decoder(full_decoder_input)
+
+        # Reconstruct the full image
+        reconstructed_image = torch.zeros_like(x)
+        patch_size = self.patch_encoder.patch_size
+        idx = 0
+        for i in range(0, x.size(2), patch_size):
+            for j in range(0, x.size(3), patch_size):
+                reconstructed_image[:, :, i:i+patch_size, j:j+patch_size] = reconstructed_patches[:, idx, :].view(-1, x.size(1), patch_size, patch_size)
+                idx += 1
+
+        return reconstructed_image, masked_indices
+
 
 class SparseAutoencoderCriterion(nn.Module):
     def __init__(self, beta=1.0, sparsity_target=0.05):
@@ -137,51 +230,6 @@ class ContractiveAutoencoderCriterion(nn.Module):
         return loss
 
 
-
-class Trainer:
-    def __init__(self, model , optimizer , criterion , dataloader ,checkpoint_dir, device="cuda"):
-        self.model = model.to(device = device)
-        self.optimizer = optimizer
-        self.criterion = criterion
-        self.device = device
-        self.dataloader = dataloader
-        self.checkpoint_dir = checkpoint_dir
-
-
-    def save_model_checkpoint(self, save_path: str):
-        """Save the model checkpoint."""
-        torch.save(self.model.state_dict(), save_path)
-        print(f"Model checkpoint saved at {save_path}")
-
-    def train_model(self, epochs):
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
-        for epoch in range(epochs):
-            print(f"Starting epoch {epoch + 1}/{epochs}")
-            self.model.train()
-            train_loss = 0.0
-            # Training loop with tqdm
-            with tqdm(self.dataloader, desc=f"Epoch {epoch + 1}/{epochs} [Training]") as pbar:
-                for images, _ in pbar:
-                    images = images.to(device)
-
-                    outputs = self.model(images)
-                    loss = self.criterion(outputs, images)
-
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
-
-                    train_loss += loss.item()
-                    pbar.set_postfix({"Batch Loss": loss.item()})
-
-            train_loss /= len(self.dataloader)
-            print(f"Epoch {epoch + 1}/{epochs} completed. Average Train Loss: {train_loss:.4f}")
-            # Save model checkpoint
-            checkpoint_path = os.path.join(self.checkpoint_dir, f"autoencoder_epoch_{epoch + 1}.pth")
-            self.save_model_checkpoint(checkpoint_path)
-
-
-
 def collate_fn(batch):
     """
     Custom collate function to handle varying sizes in COCO dataset.
@@ -194,40 +242,4 @@ def collate_fn(batch):
         images.append(image)  
         targets.append(target)  # Keep annotations as they are
     return torch.stack(images), targets
-
-
-def evaluate_model(model: nn.Module, eval_loader: DataLoader, device: torch.device, output_dir: str):
-    """
-    Evaluate the model and save reconstructed images.
-
-    Args:
-        model (nn.Module): Trained autoencoder.
-        eval_loader (DataLoader): DataLoader for evaluation.
-        device (torch.device): Device to run the model on.
-        output_dir (str): Directory to save reconstructed images.
-    """
-    # Move model to the specified device
-    model.to(device)
-    model.eval()
-    os.makedirs(output_dir, exist_ok=True)
-
-    with torch.no_grad():
-        for batch_idx, (images, _) in enumerate(tqdm(eval_loader, desc="Evaluating")):
-            images = images.to(device)
-
-            outputs = model(images)
-            images_cpu = images.cpu()
-            outputs_cpu = outputs.cpu()
-
-            for i in range(images_cpu.size(0)):
-                original_image = transforms.ToPILImage()(images_cpu[i])
-                reconstructed_image = transforms.ToPILImage()(outputs_cpu[i])
-
-                # Save images
-                original_image.save(os.path.join(output_dir, f"original_{batch_idx * eval_loader.batch_size + i}.png"))
-                reconstructed_image.save(os.path.join(output_dir, f"reconstructed_{batch_idx * eval_loader.batch_size + i}.png"))
-
-    print(f"Reconstructed images saved to {output_dir}")
-
-
 

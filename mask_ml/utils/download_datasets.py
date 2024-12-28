@@ -5,7 +5,7 @@ import zipfile
 import hashlib
 import json
 import logging
-from kaggle.api.kaggle_api_extended import KaggleApi
+import kagglehub
 
 logger = logging.getLogger('datasets_downloader')
 logging.basicConfig(
@@ -52,28 +52,12 @@ kaggle_competitions = [
         'name': 'imagenet-object-localization-challenge',
         'description': 'ImageNet Object Localization Challenge'
     },
-    {
-        'name': 'carvana-image-masking-challenge',
-        'description': 'Carvana Image Masking Challenge'
-    },
-    {
-        'name': 'pascal-voc-object-detection',
-        'description': 'Pascal VOC Object Detection Challenge'
-    }
 ]
 
 kaggle_datasets = [
     {
-        'name': 'mateuszbuda/lgg-mri-segmentation',
-        'description': 'Brain MRI segmentation'
-    },
-    {
-        'name': 'andrewmvd/car-plate-detection',
-        'description': 'License Plate Detection Dataset'
-    },
-    {
-        'name': 'andrewmvd/face-mask-detection',
-        'description': 'Face Mask Detection Dataset'
+        'name': 'sautkin/imagenet1kvalid',
+        'description': 'Imagenet Validation dataset'
     }
 ]
 
@@ -189,38 +173,19 @@ def download_coco_dataset():
 
 def download_kaggle_competition(competition_name, save_dir):
     """
-    Download a competition dataset from Kaggle.
+    Download a competition dataset from Kaggle using kagglehub.
     
     Args:
         competition_name (str): Name of the competition
         save_dir (str): Directory to save the dataset
     """
     try:
-        # Initialize the Kaggle API
-        api = KaggleApi()
-        api.authenticate()
-        
         logger.info(f"Downloading competition dataset: {competition_name}")
-        api.competition_download_files(competition_name, path=save_dir, quiet=False)
-        
-        # Find and unzip the downloaded file
-        for file in os.listdir(save_dir):
-            if file.endswith('.zip'):
-                zip_path = os.path.join(save_dir, file)
-                unzip_file(zip_path, save_dir)
-                break
-                
-        logger.info(f"Successfully downloaded and extracted competition data: {competition_name}")
+        path = kagglehub.model_download(f"competitions/{competition_name}")
+        logger.info(f"Successfully downloaded competition data to: {path}")
         
     except Exception as e:
         logger.error(f"Error downloading from Kaggle: {str(e)}")
-        logger.info("\nTo set up Kaggle API credentials:")
-        logger.info("1. Go to https://www.kaggle.com/settings")
-        logger.info("2. Click on 'Create New API Token' to download kaggle.json")
-        logger.info("3. Run these commands:")
-        logger.info("   mkdir -p ~/.kaggle")
-        logger.info("   mv path/to/downloaded/kaggle.json ~/.kaggle/")
-        logger.info("   chmod 600 ~/.kaggle/kaggle.json")
 
 def select_and_download_dataset():
     """
@@ -297,43 +262,25 @@ def select_and_download_kaggle_dataset():
 
     selected_dataset = kaggle_datasets[choice - 1]
     
-    # Create datasets directory if it doesn't exist
-    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'datasets', 'kaggle')
-    os.makedirs(dataset_dir, exist_ok=True)
-    
-    # Create specific directory for the selected dataset
-    dataset_specific_dir = os.path.join(dataset_dir, selected_dataset['name'].split('/')[-1])
-    os.makedirs(dataset_specific_dir, exist_ok=True)
-    
     # Download the dataset
     logger.info(f"\nDownloading {selected_dataset['description']}...")
-    download_kaggle_dataset(selected_dataset['name'], dataset_specific_dir)
+    download_kaggle_dataset(selected_dataset['name'], None)  # Pass None since save_dir is not used
 
 def download_kaggle_dataset(dataset_name, save_dir):
     """
-    Download a dataset from Kaggle.
+    Download a dataset from Kaggle using kagglehub.
     
     Args:
         dataset_name (str): Name of the dataset in format 'owner/dataset-name'
         save_dir (str): Directory to save the dataset
     """
     try:
-        api = KaggleApi()
-        api.authenticate()
-        
         logger.info(f"Downloading {dataset_name} from Kaggle...")
-        api.dataset_download_files(dataset_name, path=save_dir, unzip=True)
-        logger.info(f"Successfully downloaded and extracted {dataset_name}")
+        kagglehub.dataset_download(dataset_name)
+        logger.info("Successfully downloaded dataset")
         
     except Exception as e:
         logger.error(f"Error downloading from Kaggle: {str(e)}")
-        logger.info("\nTo set up Kaggle API credentials:")
-        logger.info("1. Go to https://www.kaggle.com/settings")
-        logger.info("2. Click on 'Create New API Token' to download kaggle.json")
-        logger.info("3. Run these commands:")
-        logger.info("   mkdir -p ~/.kaggle")
-        logger.info("   mv path/to/downloaded/kaggle.json ~/.kaggle/")
-        logger.info("   chmod 600 ~/.kaggle/kaggle.json")
 
 # Update the main block to use the new selection function
 if __name__ == "__main__":

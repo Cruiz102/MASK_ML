@@ -20,7 +20,6 @@ from utils import create_unique_experiment_dir, visualize_attention_heads
 import torch.nn.functional as F
 from torchvision.utils import save_image
 import matplotlib.pyplot as plt
-import numpy as np
 
 class Tasks(Enum):
     CLASSIFICATION = 1
@@ -67,7 +66,7 @@ def validation_test(
 
     # Create directories for results
     os.makedirs(output_path, exist_ok=True)
-    if attentions_heads_idx:
+    if attentions_heads_idx and len(attentions_heads_idx) > 0:  # Check if list exists and is not empty
         attention_dir = os.path.join(output_path, "attention_heads")
         os.makedirs(attention_dir, exist_ok=True)
     if task == Tasks.AUTOENCODER:
@@ -102,7 +101,6 @@ def validation_test(
             labels = labels.to(device)
 
             if task == Tasks.AUTOENCODER:
-                # Forward pass for autoencoder
                 reconstructed = model(inputs)
                 loss = F.mse_loss(reconstructed, inputs)
                 total_loss += loss.item()
@@ -110,22 +108,28 @@ def validation_test(
 
                 # Save reconstruction samples
                 if batch_idx < samples_heads_indices_size:
-                    # Save original and reconstructed images
-                    comparison = torch.cat([inputs[:8], reconstructed[:8]])
-                    save_image(comparison.cpu(),
-                             os.path.join(reconstruction_dir, f'reconstruction_{batch_idx}.png'),
-                             nrow=8)
+                    n_samples = min(inputs.size(0), 8)  # Limit to 8 samples per batch
                     
-                    # Calculate and save reconstruction error heatmap
-                    reconstruction_error = (inputs - reconstructed).abs()
-                    error_map = reconstruction_error.mean(dim=1)  # Average across channels
-                    for i in range(min(8, error_map.size(0))):
-                        plt.figure(figsize=(10, 4))
-                        plt.imshow(error_map[i].cpu().numpy(), cmap='hot')
+                    # Create comparison of original and reconstructed
+                    comparison = torch.cat([inputs[:n_samples], reconstructed[:n_samples]])
+                    save_image(comparison.cpu(),
+                             os.path.join(reconstruction_dir, f'reconstruction_batch_{batch_idx}.png'),
+                             nrow=n_samples)
+                    
+                    # Create error heatmaps for this batch
+                    reconstruction_error = (inputs[:n_samples] - reconstructed[:n_samples]).abs()
+                    error_maps = reconstruction_error.mean(dim=1)  # Average across channels
+                    
+                    # Create a single figure with subplots for this batch's error heatmaps
+                    plt.figure(figsize=(20, 4))
+                    for i in range(n_samples):
+                        plt.subplot(1, n_samples, i + 1)
+                        plt.imshow(error_maps[i].cpu().numpy(), cmap='hot')
                         plt.colorbar()
-                        plt.title(f'Reconstruction Error Heatmap - Batch {batch_idx}, Sample {i}')
-                        plt.savefig(os.path.join(reconstruction_dir, f'error_heatmap_b{batch_idx}_s{i}.png'))
-                        plt.close()
+                        plt.title(f'Sample {i}')
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(reconstruction_dir, f'error_heatmaps_batch_{batch_idx}.png'))
+                    plt.close()
 
             else:
                 # Handle existing classification and attention visualization logic
@@ -221,7 +225,7 @@ def run_evaluation(cfg: DictConfig):
         output_path=experiment_dir,
         model=model,
         dataloader=dataloader_test,
-        attentions_heads_idx=[0],
+        attentions_heads_idx=cfg.get("attention_heads",[]),
         samples_heads_indices_size=3,
         log=True,
     )
