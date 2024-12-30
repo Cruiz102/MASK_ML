@@ -15,36 +15,29 @@ from tqdm import tqdm
 from enum import Enum
 from hydra.utils import instantiate
 import random
-# Data loading
-from utils import create_unique_experiment_dir, visualize_attention_heads
+from utils import create_unique_experiment_dir, visualize_attention_heads, get_layer_output, visualize_latent_space
 import torch.nn.functional as F
 from torchvision.utils import save_image
 import matplotlib.pyplot as plt
+import numpy as np
 
 class Tasks(Enum):
     CLASSIFICATION = 1
     SEGMENTATION = 2
-    AUTOENCODER = 3  # Added new task type
+    AUTOENCODER = 3 
 
 def validation_test(
     output_path: str, 
     model: torch.nn.Module, 
     dataloader, 
     attentions_heads_idx: List[int], 
-    samples_heads_indices_size: int = 5,
+    samples_heads_indices_size: int,
+    latent_space_visualization: bool = True,
+    latent_sample_space_size: int = 100,
+    latent_space_layer_name: str = 'encoder',
+    n_components_pca: int = 2,
     log: bool = True
 ) -> float:
-    """
-    Evaluates the model on the given dataloader and logs the results.
-
-    :param output_path: Directory to store validation logs/results.
-    :param model: The PyTorch model to be evaluated.
-    :param dataloader: A DataLoader for the validation/test set.
-    :param attentions_heads: Not currently used in this example, but kept for consistency.
-    :param log: Whether to log results to CSV.
-    :return: Average classification accuracy (for classification models). 
-             For segmentation models, you can replace or append metrics as needed.
-    """
     model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -52,37 +45,36 @@ def validation_test(
     total_score = 0.0
     num_batches = len(dataloader)
 
-    # Distinguish the task based on the model's type
     if isinstance(model, VitClassificationHead):
         task = Tasks.CLASSIFICATION
     elif isinstance(model, MLPClassification):
         task = Tasks.CLASSIFICATION
     elif isinstance(model, SegmentationAutoEncoder):
         task = Tasks.SEGMENTATION
-    elif isinstance(model, ImageAutoEncoder):  # Check if it's an autoencoder
+    elif isinstance(model, ImageAutoEncoder): 
         task = Tasks.AUTOENCODER
     else:
         raise ValueError("Unknown model type provided to validation_test.")
 
-    # Create directories for results
     os.makedirs(output_path, exist_ok=True)
-    if attentions_heads_idx and len(attentions_heads_idx) > 0:  # Check if list exists and is not empty
+    if attentions_heads_idx and len(attentions_heads_idx) > 0:  
         attention_dir = os.path.join(output_path, "attention_heads")
         os.makedirs(attention_dir, exist_ok=True)
     if task == Tasks.AUTOENCODER:
         reconstruction_dir = os.path.join(output_path, "reconstructions")
         os.makedirs(reconstruction_dir, exist_ok=True)
 
-    # Initialize metrics tracking
     total_loss = 0.0
-    reconstruction_samples = []
 
-    # Randomly select batch indices to visualize
     total_batches = len(dataloader)
     sampled_batch_indices = random.sample(range(total_batches), samples_heads_indices_size)
 
     all_true_labels = []
     all_predicted_labels = []
+
+    # For latent space visualization
+    latents = []
+    latents_labels = []
 
     if log:
         os.makedirs(output_path, exist_ok=True)
@@ -99,6 +91,11 @@ def validation_test(
             start_time = time.time()
             inputs = inputs.to(device)
             labels = labels.to(device)
+
+            if latent_space_visualization and len(latents) < latent_sample_space_size:
+                layer_output = get_layer_output(model, inputs, latent_space_layer_name)
+                latents.append(layer_output.view(layer_output.size(0), -1).cpu().numpy())
+                latents_labels.append(labels.cpu().numpy())
 
             if task == Tasks.AUTOENCODER:
                 reconstructed = model(inputs)
@@ -120,7 +117,6 @@ def validation_test(
                     reconstruction_error = (inputs[:n_samples] - reconstructed[:n_samples]).abs()
                     error_maps = reconstruction_error.mean(dim=1)  # Average across channels
                     
-                    # Create a single figure with subplots for this batch's error heatmaps
                     plt.figure(figsize=(20, 4))
                     for i in range(n_samples):
                         plt.subplot(1, n_samples, i + 1)
@@ -132,10 +128,8 @@ def validation_test(
                     plt.close()
 
             else:
-                # Handle existing classification and attention visualization logic
                 if batch_idx in sampled_batch_indices and attentions_heads_idx and isinstance(model, VitClassificationHead):
                     outputs, attention_heads = model(inputs, attentions_heads_idx)
-                    # Save input images and visualize attention heads (existing code)
                     batch_dir = os.path.join(attention_dir, f"batch_{batch_idx}")
                     os.makedirs(batch_dir, exist_ok=True)
                     for i in range(inputs.size(0)):
@@ -177,6 +171,18 @@ def validation_test(
                     list(outputs.shape if task != Tasks.AUTOENCODER else reconstructed.shape)
                 ])
 
+
+        # Visualize latent space if enabled
+        if latent_space_visualization and len(latents) > 0:
+            latents = np.concatenate(latents, axis=0)
+            latents_labels = np.concatenate(latents_labels, axis=0)
+            visualize_latent_space(
+                latents, 
+                latents_labels, 
+                n_components=n_components_pca, 
+                save_path=output_path
+            )
+
     # Calculate and return final metrics
     if task == Tasks.AUTOENCODER:
         avg_loss = total_loss / num_batches
@@ -185,6 +191,7 @@ def validation_test(
     else:
         avg_score = total_score / num_batches if num_batches > 0 else 0
         print(f"Validation complete. Average metric score: {avg_score:.4f}")
+
         return avg_score
 
 
@@ -197,7 +204,6 @@ def run_evaluation(cfg: DictConfig):
     # Print the configuration for debugging/logging
     print(OmegaConf.to_yaml(cfg))
 
-    # Create dataloaders for training and testing
     dataloader_train, dataloader_test = create_dataloader(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -207,26 +213,25 @@ def run_evaluation(cfg: DictConfig):
     os.makedirs(base_output_dir, exist_ok=True)
     experiment_dir = create_unique_experiment_dir(base_output_dir, experiment_name)
 
-    # Instantiate the model directly using hydra
     model = instantiate(cfg.model)
 
-    # Load transfer learning weights if specified
     if cfg.get("transfer_learning_weights"):
         state_dict = torch.load(cfg.transfer_learning_weights, map_location=device)
         model.load_state_dict(state_dict)
         print("Loaded transfer learning weights.")
 
-    # Move model to the correct device
     model = model.to(device)
-    print("attention::::", cfg.get('attention_heads'))
 
-    # Call the validation_test function
     validation_test(
         output_path=experiment_dir,
         model=model,
         dataloader=dataloader_test,
         attentions_heads_idx=cfg.get("attention_heads",[]),
         samples_heads_indices_size=3,
+        latent_space_visualization=cfg.get("latent_space_visualization", True),
+        latent_sample_space_size=cfg.get("latent_sample_space_size", 100),
+        latent_space_layer_name=cfg.get("latent_space_layer_name", 'encoder'),
+        n_components_pca=cfg.get("n_components_pca", 2),
         log=True,
     )
 

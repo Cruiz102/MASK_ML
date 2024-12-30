@@ -11,7 +11,8 @@ REQUIRED_PACKAGES = [
     "hydra-optuna-sweeper",
     "matplotlib",
     "pytest",
-    "tqdm"
+    "tqdm",
+    "scikit-learn"
 ]
 
 setup(

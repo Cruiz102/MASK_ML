@@ -7,8 +7,14 @@ output_dir: ./runs
 experiment_name: vit_eval_rr
 transfer_learning_weights: ""
 # Data
-image_reshape: 32
+image_reshape: 28
 batch_size: 8
 
 attention_heads: []  # Indices of attention heads to visualize
 num_batches: 3  # Number of random batches to visualize
+
+# Latent space visualization
+latent_space_visualization: true
+latent_sample_space_size: 10
+latent_space_layer_name: 'encoder'
+latent_space_pca_components: 2  # Number of PCA components for latent space visualization (2 or 3)

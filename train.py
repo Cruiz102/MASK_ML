@@ -87,8 +87,17 @@ def run_training(cfg: DictConfig):
             torch.save(model.state_dict(), model_save_path)
             print(f"Model saved at {model_save_path}")
 
-            validation_test(output_path=experiment_dir, model=model, dataloader=dataloader_test, attentions_heads_idx=cfg.attention_heads,
-                            samples_heads_indices_size=3)
+            validation_test(
+                output_path=experiment_dir, 
+                model=model, 
+                dataloader=dataloader_test, 
+                attentions_heads_idx=cfg.attention_heads,
+                samples_heads_indices_size=3,
+                latent_space_visualization=cfg.get("latent_space_visualization", True),
+                latent_sample_space_size=cfg.get("latent_sample_space_size", 100),
+                latent_space_layer_name=cfg.get("latent_space_layer_name", 'encoder'),
+                n_components_pca=cfg.get("latent_space_pca_components", 2)
+            )
 
     except KeyboardInterrupt:
         print("Training interrupted. Saving latest model weights...")

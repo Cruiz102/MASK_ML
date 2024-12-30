@@ -9,3 +9,4 @@ psutil
 hydra-optuna-sweeper
 matplotlib
 pytest
+scikit-learn

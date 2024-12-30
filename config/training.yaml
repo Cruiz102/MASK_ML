@@ -1,8 +1,8 @@
 defaults:
   - _self_
   - datasets: mnist_classification
-  - model: vit_classification
-  - loss_function: cross_entropy
+  - model: image_auto_encoder
+  - loss_function: mse
   - override hydra/sweeper: optuna
 
 hydra:
@@ -28,3 +28,9 @@ transfer_learning_weights: ""
 # Visualization
 attention_heads: [0]  # Indices of attention heads to visualize
 num_batches: 3  # Number of random batches to visualize
+
+# Latent space visualization
+latent_space_visualization: true
+latent_sample_space_size: 100
+latent_space_layer_name: 'encoder'
+latent_space_pca_components: 2  # Number of PCA components for latent space visualization (2 or 3)
