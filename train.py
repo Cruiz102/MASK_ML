@@ -49,6 +49,7 @@ def run_training(cfg: DictConfig):
 
     step_losses = [] 
     step_count = 1
+    step_loss_logging_rate = cfg.get("step_loss_logging_rate", 100)
     with open(dataset_file, 'w') as f:
         f.write(f"{dataloader_train.batch_size}")
         for i in range(1):
@@ -78,8 +79,9 @@ def run_training(cfg: DictConfig):
                 loss.backward()
                 optimizer.step()
                 step_losses.append(loss.item())
-                with open(loss_file, 'a') as f:
-                    f.write(f"{step_count},{loss.item()}\n")
+                if step_count % step_loss_logging_rate == 0:
+                    with open(loss_file, 'a') as f:
+                        f.write(f"{step_count},{loss.item()}\n")
                 monitor_resources(resources_file, step_count)
                 step_count += 1
 

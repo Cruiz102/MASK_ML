@@ -18,15 +18,15 @@ hydra:
 
 # Experiment
 output_dir: ./runs
-experiment_name: vit
+experiment_name: autoencoder_low_dimensional
 epochs: 1
-batch_size: 4
+batch_size: 32
 learning_rate: 0.00002
-image_reshape: 32
+image_reshape: 28
 transfer_learning_weights: ""
 
 # Visualization
-attention_heads: [0]  # Indices of attention heads to visualize
+attention_heads: []  # Indices of attention heads to visualize
 num_batches: 3  # Number of random batches to visualize
 
 # Latent space visualization
@@ -34,3 +34,6 @@ latent_space_visualization: true
 latent_sample_space_size: 100
 latent_space_layer_name: 'encoder'
 latent_space_pca_components: 2  # Number of PCA components for latent space visualization (2 or 3)
+
+# Logging
+step_loss_logging_rate: 100  # Rate at which to log step losses

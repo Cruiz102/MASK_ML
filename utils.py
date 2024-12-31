@@ -106,7 +106,7 @@ def visualize_latent_space(latent_vectors: np.ndarray, labels: np.ndarray, n_com
         raise ValueError("n_components must be 2 or 3.")
 
 
-def get_layer_output(model, x, layer_name: str):
+def get_layer_output(model, x, layer_name: str, batch_size: int = 32, flatten: bool = True):
     """
     Returns the output of a specified layer within the model.
 
@@ -117,7 +117,7 @@ def get_layer_output(model, x, layer_name: str):
     """
     # Example for accessing a sub-layer by name
     if layer_name == 'encoder':
-        x = x.view(8, -1)
+        x = x.view(batch_size, -1)
         return model.image_encoder(x)
     elif layer_name == 'decoder':
         encoded = model.image_encoder(x)

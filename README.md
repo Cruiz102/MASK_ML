@@ -1,4 +1,3 @@
-
 # MASK_ML
 
 **Mask Segmentation Machine Learning Project**
@@ -19,51 +18,83 @@ This repository reflects my journey in implementing core ideas from the field in
 
 ## Downloading Datasets
 
+To download datasets, you can use the `download_datasets.py` script. This script supports downloading datasets from various sources, including COCO and Kaggle.
 
-#### Coco dataset
-For using the Coco dataset you can use the script download_datasets.py
+### COCO Dataset
 
-#### Imagenet Dataset
-For using the Imagenet Dataset you must create a Kaggle Account and follow the following link.
+1. **Run the Script**:
+   Execute the `download_datasets.py` script using the following command:
+   ```bash
+   python mask_ml/utils/download_datasets.py
+   ```
 
-#### CIFAR + MNIST
-These are downloaded automatically by Pytorch.
+2. **Select Dataset**:
+   Follow the prompts to select the COCO dataset you want to download. The script will handle the download and extraction process.
 
-## Project Principles
+### Kaggle Datasets
 
-To ensure the project's efficiency and scalability, the following principles guide its development:
+1. **Set Up Kaggle API**:
+   Ensure you have the Kaggle API set up. You can follow the instructions [here](https://www.kaggle.com/docs/api) to set up your Kaggle API credentials.
 
-1. **Minimize Dependencies**:  
-   Every new dependency must be carefully considered. Only absolutely necessary dependencies should be added to keep the project self-contained and lightweight. The primary dependencies are:
-   - **PyTorch**: All implementations will be built using PyTorch. If a function is available in PyTorch, it will be prioritized over alternatives like OpenCV or NumPy to maintain consistency. Ideally, all data structures will remain as tensors.
-   - **OpenCV**: Used exclusively for video visualizations, transformations, and device connections. Numpy will only be used when necessary for image annotations or device I/O.
+2. **Run the Script**:
+   Execute the `download_datasets.py` script using the following command:
+   ```bash
+   python mask_ml/utils/download_datasets.py
+   ```
 
-2. **Performance Optimization**:  
-   PyTorch is already fast, but further optimization will be explored, such as model quantization and conversions to ONNX. While the PyTorch inference pipeline should be optimized natively, ONNX Runtime support will be added for flexibility in deployment.
+3. **Select Dataset**:
+   Follow the prompts to select the Kaggle competition or dataset you want to download. The script will handle the download and extraction process.
 
-3. **Interactive & Modular**:  
-   The project will adopt a library-like structure, with individual scripts demonstrating various parts of the pipeline. Demos will showcase different functionalities for end-to-end testing.
+---
 
-4. **Easy Configuration for Training & Testing**:  
-   To streamline the process, the project will support easy configuration options. This includes:
-   - **Python `setup.py` configurations** for traditional setups.
-   - **Hydra-core** integration for modular and dynamic configuration management.
-   - **Docker pipelines** for containerized and reproducible environments.
+## Using `train.py`
+
+To train a model using the `train.py` script, follow these steps:
+
+1. **Ensure Dependencies are Installed**:
+   Make sure you have all the necessary dependencies installed. You can install them using:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Configure Training Parameters**:
+   Edit the `config/training.yaml` file to set your desired training parameters, such as learning rate, batch size, number of epochs, and other configurations.
+
+3. **Run the Training Script**:
+   Execute the `train.py` script using the following command:
+   ```bash
+   python train.py
+   ```
+
+   This will start the training process based on the configurations specified in `config/training.yaml`. The script will log the training progress, save model checkpoints, and generate visualizations as configured.
+
+4. **Monitor Training**:
+   During training, you can monitor the progress by checking the output directory specified in the configuration file. This directory will contain logs, model checkpoints, and visualizations.
 
 ---
 
 
+## Training Images examples:
 
-## Future Work
+### Autoencoder Tasks
 
-More features are under active development! Follow the commit history to stay updated on the latest progress.
+To use the Autoencoder in the training use an AutoEncoder model in the repo: We have `ImageAutoEncoder` defined changed in the training.yaml like this. Remembder to use  an autoEncoder loss function. In this case we are using mse.
 
----
 
-## Getting Started
+```yaml
+defaults:
+  - _self_
+  - datasets: mnist_classification
+  - model: image_auto_encoder
+  - loss_function: mse
+  - override hydra/sweeper: optuna
+...
 
-Instructions for setting up the project, installing dependencies, and running the training and inference scripts will be provided here soon.
+```
+example outputs:
 
----
 
-Thank you for checking out the MASK_ML project! Contributions and feedback are always welcome.
+ - ![](/assets/reconstruction_batch_0.png)
+
+ - ![](/assets/error_heatmaps_batch_0.png)
+ - ![](/assets/step_loss_plot.png)

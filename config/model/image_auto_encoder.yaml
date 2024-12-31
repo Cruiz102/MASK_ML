@@ -4,15 +4,15 @@ image_encoder:
   _target_: "mask_ml.model.mlp.MLP"
   activation_function: "relu"
   input_size: 784  # For 32x32 RGB images (3 * 32 * 32)
-  output_size: 784  # Latent dimension
-  hidden_sizes: [784, 784]
+  output_size: 15  # Latent dimension
+  hidden_sizes: [784, 200]
 
 decoder:
   _target_: "mask_ml.model.mlp.MLP"
   activation_function: "relu"
-  input_size: 784   # Should match encoder's output_size
+  input_size: 15   # Should match encoder's output_size
   output_size: 784 # Should match encoder's input_size
-  hidden_sizes: [784,784]
+  hidden_sizes: [200,784]
 
 image_size: 28
 flatten: true
