@@ -1,0 +1,20 @@
+_target_: "mask_ml.model.auto_encoder.MaskedAutoEncoder"
+encoder:
+  _target_: "mask_ml.model.mlp.MLP"
+  activation_function: "relu"
+  input_size: 200
+  output_size: 100
+  hidden_sizes: [150, 120]
+decoder:
+  _target_: "mask_ml.model.mlp.MLP"
+  activation_function: "relu"
+  input_size: 200
+  output_size: 200
+  hidden_sizes: [120, 150]
+
+
+mask_ratio: 0.75
+image_size: 256
+patch_size: 16
+num_channels: 3
+embedded_size: 200

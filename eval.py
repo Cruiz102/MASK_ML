@@ -4,7 +4,7 @@ from mask_ml.utils.datasets import create_dataloader
 from mask_ml.model.vit import VitClassificationHead
 from mask_ml.model.mlp import MLPClassification
 from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder
-from mask_ml.model.auto_encoder import ImageAutoEncoder
+from mask_ml.model.auto_encoder import ImageAutoEncoder, MaskedAutoEncoder
 import os
 from typing import List
 from torchvision.transforms.functional import to_pil_image
@@ -15,16 +15,16 @@ from tqdm import tqdm
 from enum import Enum
 from hydra.utils import instantiate
 import random
-from utils import create_unique_experiment_dir, visualize_attention_heads, get_layer_output, visualize_latent_space
+from utils import create_unique_experiment_dir, visualize_attention_heads, get_layer_output, visualize_latent_space,\
+                    save_reconstruction_and_error_maps, save_masked_input_and_reconstructions
 import torch.nn.functional as F
-from torchvision.utils import save_image
-import matplotlib.pyplot as plt
 import numpy as np
 
 class Tasks(Enum):
     CLASSIFICATION = 1
     SEGMENTATION = 2
     AUTOENCODER = 3 
+    MASKAUTOENCODER = 4
 
 def validation_test(
     output_path: str, 
@@ -53,6 +53,8 @@ def validation_test(
         task = Tasks.SEGMENTATION
     elif isinstance(model, ImageAutoEncoder): 
         task = Tasks.AUTOENCODER
+    elif isinstance(model, MaskedAutoEncoder):
+        task = Tasks.MASKAUTOENCODER
     else:
         raise ValueError("Unknown model type provided to validation_test.")
 
@@ -68,13 +70,17 @@ def validation_test(
 
     total_batches = len(dataloader)
     sampled_batch_indices = random.sample(range(total_batches), samples_heads_indices_size)
-
+    # Classification metrics
     all_true_labels = []
     all_predicted_labels = []
 
-    # For latent space visualization
+    # Latent space visualization
     latents = []
     latents_labels = []
+
+
+
+
 
     if log:
         os.makedirs(output_path, exist_ok=True)
@@ -102,30 +108,15 @@ def validation_test(
                 loss = F.mse_loss(reconstructed, inputs)
                 total_loss += loss.item()
                 metric_score = loss.item()  # Use reconstruction loss as metric
-
-                # Save reconstruction samples
                 if batch_idx < samples_heads_indices_size:
-                    n_samples = min(inputs.size(0), 8)  # Limit to 8 samples per batch
-                    
-                    # Create comparison of original and reconstructed
-                    comparison = torch.cat([inputs[:n_samples], reconstructed[:n_samples]])
-                    save_image(comparison.cpu(),
-                             os.path.join(reconstruction_dir, f'reconstruction_batch_{batch_idx}.png'),
-                             nrow=n_samples)
-                    
-                    # Create error heatmaps for this batch
-                    reconstruction_error = (inputs[:n_samples] - reconstructed[:n_samples]).abs()
-                    error_maps = reconstruction_error.mean(dim=1)  # Average across channels
-                    
-                    plt.figure(figsize=(20, 4))
-                    for i in range(n_samples):
-                        plt.subplot(1, n_samples, i + 1)
-                        plt.imshow(error_maps[i].cpu().numpy(), cmap='hot')
-                        plt.colorbar()
-                        plt.title(f'Sample {i}')
-                    plt.tight_layout()
-                    plt.savefig(os.path.join(reconstruction_dir, f'error_heatmaps_batch_{batch_idx}.png'))
-                    plt.close()
+                    save_reconstruction_and_error_maps(inputs, reconstructed, reconstruction_dir, batch_idx, inputs.size(0))
+            elif task == Tasks.MASKAUTOENCODER:
+                reconstructed, masked_indices = model(inputs)
+                loss = F.mse_loss(reconstructed, inputs)
+                total_loss += loss.item()
+                metric_score = loss.item()
+                if batch_idx < samples_heads_indices_size:
+                    save_masked_input_and_reconstructions(inputs, reconstructed, masked_indices, reconstruction_dir, batch_idx, inputs.size(0))
 
             else:
                 if batch_idx in sampled_batch_indices and attentions_heads_idx and isinstance(model, VitClassificationHead):

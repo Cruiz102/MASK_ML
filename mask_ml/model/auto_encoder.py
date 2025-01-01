@@ -53,10 +53,8 @@ class MaskPatchEncoder(nn.Module):
         self.interpolation = interpolation
         self.interpolation_scale = interpolation_scale
         
-        # Calculate number of patches
         self.num_patches = (image_size // patch_size) ** 2
         
-        # Create patch embedding layer
         self.patch_embed = nn.Conv2d(
             in_channels=num_channels,
             out_channels=embedded_size,
@@ -64,12 +62,10 @@ class MaskPatchEncoder(nn.Module):
             stride=patch_size
         )
         
-        # Position embeddings for patches
         self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches, embedded_size))
         nn.init.normal_(self.pos_embed, std=0.02)
 
     def forward(self, x):
-        # Embed patches
         x = self.patch_embed(x).flatten(2).transpose(1, 2)
         x = x + self.pos_embed
 
@@ -89,37 +85,36 @@ class MaskPatchEncoder(nn.Module):
 class MaskedAutoEncoder(nn.Module):
     def __init__(self,
                  encoder: nn.Module,
-                 decoder: nn.Module):
+                 decoder: nn.Module,
+                 mask_ratio: float = 0.75,
+                 image_size: int = 256,
+                 patch_size: int = 16,
+                 num_channels: int = 3,
+                embedded_size: int = 200
+                 ):
         super(MaskedAutoEncoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
         self.mask_token = nn.Parameter(torch.zeros(1, encoder.embedded_size))
-        self.patch_encoder = MaskPatchEncoder(mask_ratio=0.75, 
-                                              image_size=256, 
-                                              patch_size=16, 
-                                              num_channels=3, 
-                                              embedded_size=encoder.embedded_size)
+        self.patch_encoder = MaskPatchEncoder(mask_ratio=mask_ratio, 
+                                              image_size=image_size, 
+                                              patch_size=patch_size, 
+                                              num_channels=num_channels, 
+                                              embedded_size=embedded_size)
 
     def forward(self, x):
-        # Pass through patch encoder
         patch_embeddings, masked_indices, unmasked_indices = self.patch_encoder(x)
 
-        # Pass visible patches through the encoder
         encoded_visible = self.encoder(patch_embeddings)
 
-        # Prepare decoder input
         batch_size, num_patches, d_model = x.shape[0], self.patch_encoder.num_patches, self.patch_encoder.embedded_size
         full_decoder_input = torch.zeros((batch_size, num_patches, d_model), device=x.device)
         full_decoder_input[:, unmasked_indices, :] = encoded_visible
         full_decoder_input[:, masked_indices, :] = self.mask_token.unsqueeze(0).repeat(batch_size, len(masked_indices), 1)
 
-        # Add positional encoding (reuse patch encoder's positional encoding)
         full_decoder_input += self.patch_encoder.pos_embed
-
-        # Pass through decoder
         reconstructed_patches = self.decoder(full_decoder_input)
 
-        # Reconstruct the full image
         reconstructed_image = torch.zeros_like(x)
         patch_size = self.patch_encoder.patch_size
         idx = 0
@@ -199,16 +194,10 @@ class ContractiveAutoencoderCriterion(nn.Module):
         :param inputs: Original inputs.
         :return: Contractive loss.
         """
-        # Enable gradient computation for the inputs
         inputs.requires_grad = True
         
-        # Forward pass through the encoder to get latent representation
         latent = model.image_encoder(inputs)
-        
-        # Compute reconstruction
         reconstruction = model(inputs)
-
-        # Reconstruction loss
         recon_loss = self.reconstruction_loss(reconstruction, inputs)
 
         # Compute the Jacobian of the latent representation
@@ -221,10 +210,7 @@ class ContractiveAutoencoderCriterion(nn.Module):
         for param in inputs.grad:
             contractive_loss += torch.sum(param ** 2)
         
-        # Combine reconstruction and contractive losses
         loss = recon_loss + self.lambda_reg * contractive_loss
-
-        # Reset gradients on inputs
         inputs.requires_grad = False
 
         return loss

@@ -4,6 +4,10 @@ from typing import List
 from torch import Tensor
 import numpy as np
 from sklearn.decomposition import PCA
+import torch
+from torchvision.utils import save_image
+
+
 def create_unique_experiment_dir(output_dir, experiment_name):
     experiment_dir = os.path.join(output_dir, experiment_name)
     counter = 1
@@ -127,3 +131,64 @@ def get_layer_output(model, x, layer_name: str, batch_size: int = 32, flatten: b
         return layer(x)
     else:
         raise ValueError(f"Layer '{layer_name}' not found in the model.")
+    
+
+
+
+def save_reconstruction_and_error_maps(inputs, reconstructed, reconstruction_dir, batch_idx, bath_size):
+    n_samples = min(inputs.size(0), bath_size)  # Limit to 8 samples per batch
+
+    # Create comparison of original and reconstructed
+    comparison = torch.cat([inputs[:n_samples], reconstructed[:n_samples]])
+    save_image(comparison.cpu(),
+               os.path.join(reconstruction_dir, f'reconstruction_batch_{batch_idx}.png'),
+               nrow=n_samples)
+
+    # Create error heatmaps for this batch
+    reconstruction_error = (inputs[:n_samples] - reconstructed[:n_samples]).abs()
+    error_maps = reconstruction_error.mean(dim=1)  # Average across channels
+
+    plt.figure(figsize=(20, 4))
+    for i in range(n_samples):
+        plt.subplot(1, n_samples, i + 1)
+        plt.imshow(error_maps[i].cpu().numpy(), cmap='hot')
+        plt.colorbar()
+        plt.title(f'Sample {i}')
+    plt.tight_layout()
+    plt.savefig(os.path.join(reconstruction_dir, f'error_heatmaps_batch_{batch_idx}.png'))
+    plt.close()
+
+
+
+def save_masked_input_and_reconstructions(inputs, reconstructed, masked_indices, reconstruction_dir, batch_idx, batch_size):
+    n_samples = min(inputs.size(0), batch_size)  # Limit to batch_size samples per batch
+
+    # Create comparison of original and reconstructed
+    comparison = torch.cat([inputs[:n_samples], reconstructed[:n_samples]])
+    save_image(comparison.cpu(),
+               os.path.join(reconstruction_dir, f'reconstruction_batch_{batch_idx}.png'),
+               nrow=n_samples)
+
+    # Create masked input images
+    masked_inputs = inputs.clone()
+    for idx in masked_indices:
+        masked_inputs[:, :, idx // inputs.size(2), idx % inputs.size(3)] = 0  # Mask the patches
+
+    # Save masked input images
+    save_image(masked_inputs.cpu(),
+               os.path.join(reconstruction_dir, f'masked_inputs_batch_{batch_idx}.png'),
+               nrow=n_samples)
+
+    # Create error heatmaps for this batch
+    reconstruction_error = (inputs[:n_samples] - reconstructed[:n_samples]).abs()
+    error_maps = reconstruction_error.mean(dim=1)  # Average across channels
+
+    plt.figure(figsize=(20, 4))
+    for i in range(n_samples):
+        plt.subplot(1, n_samples, i + 1)
+        plt.imshow(error_maps[i].cpu().numpy(), cmap='hot')
+        plt.colorbar()
+        plt.title(f'Sample {i}')
+    plt.tight_layout()
+    plt.savefig(os.path.join(reconstruction_dir, f'error_heatmaps_batch_{batch_idx}.png'))
+    plt.close()
