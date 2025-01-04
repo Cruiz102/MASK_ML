@@ -276,7 +276,7 @@ def download_kaggle_dataset(dataset_name, save_dir):
     """
     try:
         logger.info(f"Downloading {dataset_name} from Kaggle...")
-        kagglehub.dataset_download(dataset_name)
+        logger.info(kagglehub.dataset_download(dataset_name))
         logger.info("Successfully downloaded dataset")
         
     except Exception as e:

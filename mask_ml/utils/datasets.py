@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
+from torchvision import transforms, datasets
 from pycocotools.coco import COCO
 from pycocotools import mask as maskUtils
 import os
@@ -29,10 +29,15 @@ def create_dataloader(cfg: DictConfig) -> Union[Tuple[DataLoader, DataLoader],Da
                                                 image_size=(image_size,image_size))
         dataset_test = CocoSegmentationDataset(annotation_dir =annotation_test_dir , img_dir=image_test_dir,
                                                         image_size=(image_size,image_size))
-    elif dataset_name == "sa1b":
-        dataset_train = SA1BImageDataset(image_dir)
-    elif dataset_name =='imagenet_classification':
-        dataset_train = torchvision.datasets.ImageNet(image_dir, split='val')
+    elif dataset_name == "imagenet1kvalid":
+        base_dir = cfg.get('datasets').get('base_dir')
+        transform = transforms.Compose([
+            transforms.ToTensor(),  # Convert PIL Image to Tensor
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.Resize((image_size,image_size)),  # Resize the image to 64x64 pixels
+        ])
+        dataset_train = datasets.ImageFolder(root=base_dir, transform=transform)
+        dataset_test = datasets.ImageFolder(root=base_dir, transform=transform)
         
     elif dataset_name == 'cifar100_classification':
         base_dir = cfg.get('datasets').get('base_dir')

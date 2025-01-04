@@ -7,6 +7,10 @@ from typing import Optional, Tuple
 from dataclasses import dataclass
 import logging
 from mask_ml.model.mlp import MLP
+from mask_ml.model.flex_attn_scores import MaskType
+
+
+
 # Configure logging
 transformer_logger = logging.getLogger("transformer")
 transformer_logger.setLevel(logging.DEBUG)
@@ -107,6 +111,9 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
 
 
 
+
+
+
 class MultiHeadAttention(nn.Module):
     def __init__(
         self,
@@ -114,7 +121,8 @@ class MultiHeadAttention(nn.Module):
         attention_heads: int = 5,
         dropout_prob: float = 0.2,
         flash_attention: bool = False,
-        rotary_relative_embeddings: bool = False
+        rotary_relative_embeddings: bool = False,
+        flex_attention_score_mod: Optional[MaskType] = None,
     ):
         super(MultiHeadAttention, self).__init__()
         self.embedded_size = embedded_size
@@ -131,11 +139,12 @@ class MultiHeadAttention(nn.Module):
         if self.rotational_embeddings:
             self.rot_embeddings = RotaryEmbedding(embedded_size)
 
+        self.flex_attention_score_mod = flex_attention_score_mod
+
     # Forward Attention by https://github.com/karpathy/nanoGPT/blob/master/model.py#L29
     def forward(self, x, position_ids: Optional[Tensor] = None)-> Tuple[Tensor, Tensor]:
         B, Seq, n_embd = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v   = self.c_attn(x).split(self.embedded_size, dim=2)
         k = k.view(B, Seq, self.attention_heads, n_embd // self.attention_heads).transpose(1, 2) # (B,    , T, hs)
         q = q.view(B, Seq, self.attention_heads, n_embd // self.attention_heads).transpose(1, 2) # (B, nh, T, hs)
@@ -156,6 +165,12 @@ class MultiHeadAttention(nn.Module):
                 is_causal=True
             )
             att = y
+
+        elif self.flex_attention_score_mod is not None:
+            # use the flex attention score mod
+            att = self.flex_attention_score_mod(B, self.attention_heads, Seq, Seq)
+            y = att @ v
+        
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -170,7 +185,7 @@ class MultiHeadAttention(nn.Module):
         
         return y, att
     
-    
+
 
     
 class TransformerBlock(nn.Module):
@@ -202,4 +217,3 @@ class TransformerBlock(nn.Module):
         y  += x
         y = y + self.feed_forward(self.norm_layer_2(y))
         return y, attention_head
-
