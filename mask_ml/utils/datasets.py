@@ -13,14 +13,33 @@ import torchvision
 from omegaconf import DictConfig
 from typing import Union, Tuple
 
+
+
+def collate_fn(batch):
+    """
+    Custom collate function to handle varying sizes in COCO dataset.
+    Resizes images and keeps annotations as-is.
+    """
+    images = []
+    targets = []
+    for image, target in batch:
+        # Images are already tensors because of the dataset transform
+        images.append(image)  
+        targets.append(target)  # Keep annotations as they are
+    return torch.stack(images), targets
+
+
+
+
+
 # This function is to use in th train.py and eval.py of the project.
 def create_dataloader(cfg: DictConfig) -> Union[Tuple[DataLoader, DataLoader],DataLoader]:
     dataset_name = cfg.get('datasets', {}).get('name')
     batch_size = cfg.get('batch_size', 32) 
     shuffle = cfg.get('shuffle', False)
+    image_size = cfg.get('image_reshape')
     # Select the appropriate dataset
     if dataset_name == "coco_segmentation":
-        image_size = cfg.get('datasets').get('image_size')
         annotation_train_dir = cfg.get('datasets').get('annotation_train_dir')
         annotation_test_dir = cfg.get('datasets').get('annotation_test_dir')
         image_train_dir = cfg.get('datasets').get('image_train_dir')
@@ -29,12 +48,12 @@ def create_dataloader(cfg: DictConfig) -> Union[Tuple[DataLoader, DataLoader],Da
                                                 image_size=(image_size,image_size))
         dataset_test = CocoSegmentationDataset(annotation_dir =annotation_test_dir , img_dir=image_test_dir,
                                                         image_size=(image_size,image_size))
-    elif dataset_name == "imagenet1kvalid":
+    elif dataset_name == "imagenet1kvalid_classification":
         base_dir = cfg.get('datasets').get('base_dir')
         transform = transforms.Compose([
             transforms.ToTensor(),  # Convert PIL Image to Tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            transforms.Resize((image_size,image_size)),  # Resize the image to 64x64 pixels
+            transforms.Resize((image_size,image_size))
         ])
         dataset_train = datasets.ImageFolder(root=base_dir, transform=transform)
         dataset_test = datasets.ImageFolder(root=base_dir, transform=transform)

@@ -162,7 +162,7 @@ class MultiHeadAttention(nn.Module):
                 q, k, v, 
                 attn_mask=None, 
                 dropout_p=self.dropout_prob if self.training else 0,
-                is_causal=True
+                is_causal=False
             )
             att = y
 

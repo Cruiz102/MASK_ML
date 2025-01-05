@@ -1,6 +1,6 @@
 import torch.amp
 import cv2
-from typing import List, Optional
+from typing import List
 import torch
 import numpy as np
 from third_party.sam_cutie import SamCutiePipeline

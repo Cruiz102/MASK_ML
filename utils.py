@@ -6,6 +6,8 @@ import numpy as np
 from sklearn.decomposition import PCA
 import torch
 from torchvision.utils import save_image
+import cv2
+from scipy.ndimage import zoom
 
 
 def create_unique_experiment_dir(output_dir, experiment_name):
@@ -32,24 +34,6 @@ def plot_recourses_per_step(output_path):
     plt.grid()
     plt.savefig(os.path.join(output_path,'resources_plot.png'))
     plt.close()
-
-
-def visualize_attention_heads(attention_heads: List[Tensor], save_path: str):
-    """
-    Visualizes and saves attention head heatmaps.
-    :param attention_heads: List of attention head tensors (one per layer).
-    :param save_path: Directory where images will be saved.
-    """
-    os.makedirs(save_path, exist_ok=True)
-    for layer_idx, head in enumerate(attention_heads):
-        # Assuming `head` is of shape (Batch, Heads, Seq_len, Seq_len)
-        for head_idx in range(head.shape[1]):
-            plt.figure(figsize=(10, 10))
-            plt.imshow(head[0, head_idx].cpu().detach().numpy(), cmap="viridis")
-            plt.title(f"Layer {layer_idx + 1}, Head {head_idx + 1}")
-            plt.colorbar()
-            plt.savefig(os.path.join(save_path, f"layer_{layer_idx+1}_head_{head_idx+1}.png"))
-            plt.close()
 
 
 def visualize_latent_space(latent_vectors: np.ndarray, labels: np.ndarray, n_components: int = 2, save_path: str = None):
@@ -192,3 +176,57 @@ def save_masked_input_and_reconstructions(inputs, reconstructed, masked_indices,
     plt.tight_layout()
     plt.savefig(os.path.join(reconstruction_dir, f'error_heatmaps_batch_{batch_idx}.png'))
     plt.close()
+
+def save_attention_overlay(attention_heads: List[Tensor], image_batch: Tensor, save_path: str):
+    """
+    Visualizes and saves attention overlays on images in a batch.
+    :param attention_heads: List of attention head tensors (one per layer).
+    :param image_batch: A batch of image tensors (Batch, Channels, Height, Width).
+    :param save_path: Directory where images will be saved.
+    """
+    os.makedirs(save_path, exist_ok=True)
+    
+    for layer_idx, attention_layer in enumerate(attention_heads):
+        # Assuming attention_layer is of shape (Batch, Heads, Tokens, Tokens)
+        for img_idx, image_tensor in enumerate(image_batch):
+            head_avg_attention = attention_layer[img_idx].mean(dim=0)  # Average across heads (Shape: Tokens x Tokens)
+            cls_attention = head_avg_attention[0, 1:]  # Ignore [CLS] to [CLS] attention
+            
+            image_height, image_width = image_tensor.shape[1], image_tensor.shape[2]
+            num_patches_height = int(cls_attention.shape[0] ** 0.5)
+            num_patches_width = int(cls_attention.shape[0] ** 0.5)
+            cls_attention = cls_attention.reshape(num_patches_height, num_patches_width).detach().cpu().numpy()
+
+            # Interpolate the attention map to match the image size
+            attention_map = zoom(cls_attention, (image_height / num_patches_height, image_width / num_patches_width))
+            attention_map = (attention_map - attention_map.min()) / (attention_map.max() - attention_map.min())
+            
+            # Convert the image tensor to a NumPy array
+            image_np = image_tensor.permute(1, 2, 0).cpu().numpy()  # (H, W, C)
+            image_np = (image_np * 255).astype(np.uint8)
+            
+            # Create a heatmap and overlay it on the image
+            heatmap = cv2.applyColorMap((attention_map * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            overlay = cv2.addWeighted(heatmap, 0.6, image_np, 0.4, 0)
+            
+            # Save the overlay image
+            output_path = os.path.join(save_path, f"img_{img_idx + 1}_layer_{layer_idx + 1}.png")
+            plt.imsave(output_path, overlay)
+
+def visualize_attention_heads(attention_heads: List[Tensor], save_path: str):
+    """
+    Visualizes and saves attention head heatmaps.
+    :param attention_heads: List of attention head tensors (one per layer).
+    :param save_path: Directory where images will be saved.
+    """
+    os.makedirs(save_path, exist_ok=True)
+    for layer_idx, head in enumerate(attention_heads):
+        # Assuming `head` is of shape (Batch, Heads, Seq_len, Seq_len)
+        for head_idx in range(head.shape[1]):
+            plt.figure(figsize=(10, 10))
+            plt.imshow(head[0, head_idx].cpu().detach().numpy(), cmap="viridis")
+            plt.title(f"Layer {layer_idx + 1}, Head {head_idx + 1}")
+            plt.colorbar()
+            plt.savefig(os.path.join(save_path, f"layer_{layer_idx+1}_head_{head_idx+1}.png"))
+            plt.close()
+

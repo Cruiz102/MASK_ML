@@ -15,8 +15,8 @@ from tqdm import tqdm
 from enum import Enum
 from hydra.utils import instantiate
 import random
-from utils import create_unique_experiment_dir, visualize_attention_heads, get_layer_output, visualize_latent_space,\
-                    save_reconstruction_and_error_maps, save_masked_input_and_reconstructions
+from utils import (create_unique_experiment_dir, visualize_attention_heads, get_layer_output, visualize_latent_space,
+                    save_reconstruction_and_error_maps, save_masked_input_and_reconstructions,save_attention_overlay)
 import torch.nn.functional as F
 import numpy as np
 
@@ -129,6 +129,8 @@ def validation_test(
                         input_image.save(input_image_path)
 
                     visualize_attention_heads(attention_heads, os.path.join(batch_dir, "attention_maps"))
+                    save_attention_overlay(attention_heads,inputs, os.path.join(batch_dir, "overlays"))
+
 
                     metadata_path = os.path.join(batch_dir, "metadata.txt")
                     with open(metadata_path, "w") as metadata_file:
@@ -217,7 +219,7 @@ def run_evaluation(cfg: DictConfig):
         output_path=experiment_dir,
         model=model,
         dataloader=dataloader_test,
-        attentions_heads_idx=cfg.get("attention_heads",[]),
+        attentions_heads_idx=cfg.get("attention_heads",[0]),
         samples_heads_indices_size=3,
         latent_space_visualization=cfg.get("latent_space_visualization", True),
         latent_sample_space_size=cfg.get("latent_sample_space_size", 100),
