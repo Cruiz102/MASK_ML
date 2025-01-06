@@ -210,8 +210,8 @@ def save_attention_overlay(attention_heads: List[Tensor], image_batch: Tensor, s
             overlay = cv2.addWeighted(heatmap, 0.6, image_np, 0.4, 0)
             
             # Save the overlay image
-            output_path = os.path.join(save_path, f"img_{img_idx + 1}_layer_{layer_idx + 1}.png")
-            plt.imsave(output_path, overlay)
+            plt.imsave(os.path.join(save_path, f"attention{img_idx + 1}_layer_{layer_idx + 1}.png"), attention_map)
+            plt.imsave(os.path.join(save_path, f"overlay{img_idx + 1}_layer_{layer_idx + 1}.png"), overlay)
 
 def visualize_attention_heads(attention_heads: List[Tensor], save_path: str):
     """

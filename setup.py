@@ -15,6 +15,15 @@ REQUIRED_PACKAGES = [
     "scikit-learn"
 ]
 
+EXTRAS_REQUIRE = {
+    "app": ["pydantic",
+            "fastapi",
+            "uvicorn",
+            "huggingface_hub",
+            ]
+}
+
+
 setup(
     name="ml_mask",
     version="0.1",
