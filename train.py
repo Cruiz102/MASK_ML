@@ -3,8 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 from mask_ml.utils.datasets import create_dataloader
 from mask_ml.model.vit import   VitClassificationHead
-from mask_ml.model.segmentation_auto_encoder import SegmentationAutoEncoder
-from mask_ml.model.auto_encoder import ImageAutoEncoder
+from mask_ml.model.auto_encoder import ImageAutoEncoder, MaskedAutoEncoder, MaskAutoEncoderCriterion
 from tqdm import tqdm
 from torch.optim.adamw import AdamW
 from eval import validation_test
@@ -40,6 +39,9 @@ def run_training(cfg: DictConfig):
     optimizer = AdamW(model.parameters(), lr=lr)
     
     criterion = instantiate(cfg.loss_function)
+    if isinstance(model, MaskedAutoEncoder):
+        criterion = MaskAutoEncoderCriterion(
+            reconstruction_loss_fn=criterion)
 
     loss_file = os.path.join(experiment_dir, "step_losses.csv")
     training_data_file = os.path.join(experiment_dir, 'training_data.txt')
@@ -67,15 +69,25 @@ def run_training(cfg: DictConfig):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 optimizer.zero_grad()
+                # FORWARD PASS DEPENDING ON THE MODEL
                 if isinstance(model, VitClassificationHead):
                     y,_ = model(inputs)
+                elif isinstance(model,MaskedAutoEncoder):
+                    y, mask_indices = model(inputs)
                 else:
                     y = model(inputs)
-                
+
+
+                # LOSS CALCULATION DEPENDING ON THE MODEL
                 if isinstance(model, ImageAutoEncoder):
                     loss = criterion(y, inputs)
+                if isinstance(model, MaskedAutoEncoder):
+                    loss = criterion(y,inputs,labels)
                 else:
                     loss = criterion(y, labels)
+
+
+                # BACKWARD PASS OPTIMATION
                 loss.backward()
                 optimizer.step()
                 step_losses.append(loss.item())

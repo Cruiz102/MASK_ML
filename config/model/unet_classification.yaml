@@ -1,0 +1,36 @@
+_target_: "mask_ml.model.unet.UNet"
+
+# UNet specific parameters
+n_channels: 3
+n_classes: 1000
+bilinear: False
+
+# Configurable layers and sizes
+layers:
+  - in_channels: 3
+    out_channels: 64
+    downsample: False
+  - in_channels: 64
+    out_channels: 128
+    downsample: True
+  - in_channels: 128
+    out_channels: 256
+    downsample: True
+  - in_channels: 256
+    out_channels: 512
+    downsample: True
+  - in_channels: 512
+    out_channels: 1024
+    downsample: True
+  - in_channels: 1024
+    out_channels: 512
+    upsample: True
+  - in_channels: 512
+    out_channels: 256
+    upsample: True
+  - in_channels: 256
+    out_channels: 128
+    upsample: True
+  - in_channels: 128
+    out_channels: 64
+    upsample: True

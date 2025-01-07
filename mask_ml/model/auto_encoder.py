@@ -125,6 +125,58 @@ class MaskedAutoEncoder(nn.Module):
 
         return reconstructed_image, masked_indices
 
+class MaskAutoEncoderCriterion(nn.Module):
+    def __init__(self, reconstruction_loss_fn: nn.Module = nn.MSELoss(reduction='none'), mask_loss_weight: float = 1.0):
+        """
+        Initialize the MaskAutoEncoderCriterion.
+
+        Args:
+            reconstruction_loss_fn (nn.Module): The reconstruction loss function (e.g., MSELoss, L1Loss).
+            mask_loss_weight (float): Weight to apply to the mask loss.
+        """
+        super(MaskAutoEncoderCriterion, self).__init__()
+        self.reconstruction_loss_fn = reconstruction_loss_fn
+        self.mask_loss_weight = mask_loss_weight
+
+    def forward(self, reconstructed_image, original_image, masked_indices):
+        """
+        Compute the reconstruction loss for the masked tokens only.
+        
+        Args:
+            reconstructed_image (torch.Tensor): The output from the autoencoder, shape (B, C, H, W).
+            original_image (torch.Tensor): The ground truth image, shape (B, C, H, W).
+            masked_indices (list of torch.Tensor): Indices of masked patches for each sample in the batch.
+
+        Returns:
+            torch.Tensor: The loss for the masked tokens.
+        """
+        batch_size, num_channels, height, width = original_image.shape
+        patch_size = height // int(original_image.shape[-1] / reconstructed_image.size(1))  # Patch size based on resolution
+
+        # Divide the images into patches
+        patches_reconstructed = reconstructed_image.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
+        patches_reconstructed = patches_reconstructed.contiguous().view(batch_size, num_channels, -1, patch_size, patch_size)
+
+        patches_original = original_image.unfold(2, patch_size, patch_size).unfold(3, patch_size, patch_size)
+        patches_original = patches_original.contiguous().view(batch_size, num_channels, -1, patch_size, patch_size)
+
+        # Initialize a mask for all patches
+        mask = torch.zeros(patches_reconstructed.shape[2], dtype=torch.bool, device=reconstructed_image.device)
+
+        # Set masked patches to True
+        for idx in range(batch_size):
+            mask[masked_indices[idx]] = True
+
+        # Compute the reconstruction loss only for masked patches
+        reconstruction_loss = self.reconstruction_loss_fn(
+            patches_reconstructed[:, :, mask, :, :],
+            patches_original[:, :, mask, :, :]
+        )
+
+        # Aggregate the loss and apply the mask weight
+        loss = reconstruction_loss.mean() * self.mask_loss_weight
+        return loss
+
 
 class SparseAutoencoderCriterion(nn.Module):
     def __init__(self, beta=1.0, sparsity_target=0.05):
