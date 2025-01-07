@@ -6,7 +6,7 @@ def test_vit_model_with_specific_configuration():
     # Test Configuration
     ###################
     image_size = 28
-    ouput_size = 10
+    output_size = 10
     ###################
     configurations = generate_all_valid_configurations(image_size)
     conf = random.choice(configurations)
@@ -14,25 +14,23 @@ def test_vit_model_with_specific_configuration():
     k = conf['kernel']
     s = conf['stride']
     att = conf['attention_heads']
-    vit_classification = VitClassificationConfig(
-        model_config=ViTConfig(
-            image_size=image_size,
-            transformer_blocks=1,
-            encoder_stride=s,
-            patch_size=k,
-            embedded_size=image_size,  
-            attention_heads=att
-        ),
-        input_size=image_size,  
-        num_classes=ouput_size  
-    )
-    dummy_image = torch.randn(1, 3, vit_classification.model_config.image_size, vit_classification.model_config.image_size)
-    model = VitClassificationHead(vit_classification)
-    model.eval()
-    output = model(dummy_image)
-    assert output.shape == (1, ouput_size), f"Expected output shape (1, output_size), got {output.shape}"
+    dummy_image = torch.randn(1, 3, image_size, image_size)
+    model = VitClassificationHead(
+        input_size=  image_size,
+        num_classes=output_size,
+        transformer_blocks=1,
+        encoder_stride=s,
+        patch_size=k,
+        embedded_size=image_size,
+        attention_heads=att
 
-    print("Forward pass successful with output:", output)
+
+    )
+    model.eval()
+    output_probs, atten_h = model(dummy_image)
+    assert output_probs.shape == (1, output_size), f"Expected output shape (1, output_size), got {output_probs.shape}"
+
+    print("Forward pass successful with output:", output_probs)
 
 def test_vit_model_with_multiple_configurations():
     # Define test parameters
@@ -64,54 +62,46 @@ def test_vit_model_with_multiple_configurations():
                 for output_size in output_sizes:
                     print("Testing Configuration:", conf, f"Channels: {channel}, Output Size: {output_size}")
 
-                    # Define the model configuration
-                    vit_classification = VitClassificationConfig(
-                        model_config=ViTConfig(
-                            image_size=image_size,
-                            transformer_blocks=1,
-                            encoder_stride=s,
-                            patch_size=k,
-                            num_channels=channel,
-                            embedded_size=image_size,  
-                            attention_heads=att
-                        ),
-                        input_size=image_size,  
-                        num_classes=output_size  
-                    )
                     dummy_image = torch.randn(1, channel, image_size, image_size)
-                    model = VitClassificationHead(vit_classification)
+                    model = VitClassificationHead(
+                        input_size= image_size,
+                        num_classes=output_size,
+                        transformer_blocks=1,
+                        encoder_stride=s,
+                        patch_size=k,
+                        num_channels=channel ,
+                        embedded_size=image_size,
+                        attention_heads=att
+                    )
                     model.eval()
-                    output = model(dummy_image)
-                    assert output.shape == (1, output_size), f"Expected output shape (1, {output_size}), got {output.shape}"
+                    output_probs, attn_h = model(dummy_image)
+                    assert output_probs.shape == (1, output_size), f"Expected output shape (1, {output_size}), got {output_probs.shape}"
                     print("Forward pass successful with configuration:", conf)
 
 def test_patch_encoder_interpolation():
     # Test Configuration
     ###################
     image_size = 28
-    ouput_size = 10
+    output_size = 10
     ###################
-    vit_classification = VitClassificationConfig(
-        model_config=ViTConfig(
-            image_size=image_size,
-            embedded_size=image_size, 
-            transformer_blocks=1,
-            interpolation=True,
-            interpolation_scale=1,
-            num_channels=3,
-            patch_size=14,
-            encoder_stride=4,
-            attention_heads=1,
-        ),
-        input_size=image_size,  
-        num_classes=ouput_size  
-    )
-
     dummy_image = torch.randn(1, 3,70, 70)
-    model = VitClassificationHead(vit_classification)
+    model = VitClassificationHead(
+        input_size=  image_size,
+        num_classes=output_size,
+        transformer_blocks=1,
+        encoder_stride=4,
+        patch_size=14,
+        embedded_size=image_size,
+        attention_heads=1,
+        interpolation=True,
+        interpolation_scale=1,
+        num_channels=3,
+
+
+    )
     model.eval()
-    output = model(dummy_image)
-    assert output.shape == (1, ouput_size), f"Expected output shape (1, output_size), got {output.shape}"
+    output_probs, attn_h = model(dummy_image)
+    assert output_probs.shape == (1, output_size), f"Expected output shape (1, output_size), got {output_probs.shape}"
 
 
 

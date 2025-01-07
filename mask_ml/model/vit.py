@@ -222,7 +222,9 @@ class VitClassificationHead(nn.Module):
         **vit_kwargs
     ):
         super(VitClassificationHead, self).__init__()
-        self.model = VitModel(**vit_kwargs)
+        self.input_size = input_size
+        self.num_classes = num_classes
+        self.model = VitModel(image_size=input_size,**vit_kwargs)
         self.linear_classifier = nn.Linear(input_size, num_classes)
 
     def forward(self, x: Union[Tensor, List[Image.Image]], attention_heads_idx: List[int]=[]):
