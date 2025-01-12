@@ -5,8 +5,8 @@ class ImageAutoEncoder(nn.Module):
     def __init__(self,
                  image_encoder: nn.Module,
                  decoder: nn.Module,
-                 image_size: int,
-                 flatten: bool
+                 image_size: int = 32,
+                 flatten: bool = False
 
                  ):
         super(ImageAutoEncoder, self).__init__()

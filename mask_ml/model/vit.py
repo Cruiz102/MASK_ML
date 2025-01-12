@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch import Tensor
 import torch.nn.functional as F
-from typing import Optional, Union, List, Literal, Tuple
+from typing import Optional, Union, List, Literal, Tuple, Dict, Any, AnyStr
 from PIL import Image
 import numpy as np
 from torchvision.transforms.functional import to_tensor
@@ -54,7 +54,7 @@ def find_divisors(n: int):
                 divisors.append(n // i)
     return sorted(divisors)
 
-def generate_all_valid_configurations(image_size: int):
+def generate_all_valid_configurations(image_size: int)-> List[Dict]:
     """
     Given an image size (assuming a square image), generate 
     all possible valid configurations for the ViT model based on

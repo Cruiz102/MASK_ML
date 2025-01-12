@@ -38,7 +38,10 @@ class MLPClassification(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, activation_function: str, input_size: int, output_size: int, hidden_sizes: Optional[List[int]] = None):
+    def __init__(self, activation_function: str = "relu", 
+                input_size: int = 32 ,
+                output_size: int = 10,
+                hidden_sizes: Optional[List[int]] = None):
         super(MLP, self).__init__()
         if hidden_sizes:
             layer_sizes = [input_size] + hidden_sizes + [output_size]

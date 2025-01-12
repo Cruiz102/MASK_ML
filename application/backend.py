@@ -17,26 +17,51 @@ from backend.data_types import (
     CancelPorpagateResponse,
 )
 from backend.inference import InferenceAPI
-
+from typing import Dict
+from uuid import uuid4
 app = FastAPI()
+
+# Global session store in server memory
+sessions: Dict[str, dict] = {}
+
 
 # Instantiate the InferenceAPI class
 inference_api = InferenceAPI()
 
-# Map the public methods to FastAPI routes
+
+
+# Dependency to get session data
+def get_session(session_id: str):
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return sessions[session_id]
+
+
 @app.post("/start_session", response_model=StartSessionResponse)
 async def start_session(request: StartSessionRequest):
     try:
-        return inference_api.start_session(request)
+        # Generate a new session ID
+        session_id = str(uuid4())
+        # Initialize session data
+        sessions[session_id] = {"data": {}, "inference_api": inference_api.start_session(request)}
+        return StartSessionResponse(session_id=session_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/close_session", response_model=CloseSessionResponse)
 async def close_session(request: CloseSessionRequest):
     try:
-        return inference_api.close_session(request)
+        session_id = request.session_id
+        if session_id not in sessions:
+            raise HTTPException(status_code=404, detail="Session not found")
+        # Close the session in inference_api
+        response = inference_api.close_session(request)
+        # Remove session from the store
+        del sessions[session_id]
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/add_points", response_model=PropagateDataResponse)
 async def add_points(request: AddPointsRequest):

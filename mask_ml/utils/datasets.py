@@ -11,7 +11,7 @@ import json
 from torch.utils.data import DataLoader
 import torchvision
 from omegaconf import DictConfig
-from typing import Union, Tuple
+from typing import Union, Tuple, Sequence
 
 
 
@@ -86,6 +86,20 @@ def create_dataloader(cfg: DictConfig) -> Union[Tuple[DataLoader, DataLoader],Da
     return (dataloader_train, dataloader_test)
 
 
+
+class DummyRandomDataset(Dataset):
+    def __init__(self,
+                 size: Sequence = [3,28,28],
+                 dataset_size: int = 200
+                 ):
+        self.dataset_size = dataset_size
+
+    def  __len__(self):
+        return len(self.dataset_size)
+    
+    def __getitem__(self, index):
+        return torch.randn()
+        pass
 class CocoSegmentationDataset(Dataset):
     def __init__(self, 
                  annotation_dir: str ,
@@ -199,6 +213,9 @@ class SA1BImageDataset(Dataset):
             sample['image'] = self.transforms(sample['image'])
 
         return sample
+
+
+
 
 
 if __name__ == "__main__":

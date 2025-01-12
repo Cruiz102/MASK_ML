@@ -1,6 +1,6 @@
 import os
 import matplotlib.pyplot as plt
-from typing import List
+from typing import List, Sequence
 from torch import Tensor
 import numpy as np
 from sklearn.decomposition import PCA
@@ -94,7 +94,7 @@ def visualize_latent_space(latent_vectors: np.ndarray, labels: np.ndarray, n_com
         raise ValueError("n_components must be 2 or 3.")
 
 
-def get_layer_output(model, x, layer_name: str, batch_size: int = 32, flatten: bool = True):
+def get_layer_output(model, x, layer_name: str, batch_size: int = 32, flatten: bool = False):
     """
     Returns the output of a specified layer within the model.
 
@@ -103,15 +103,16 @@ def get_layer_output(model, x, layer_name: str, batch_size: int = 32, flatten: b
     :param layer_name: Name of the layer to capture output from.
     :return: Output tensor from the specified layer.
     """
-    # Example for accessing a sub-layer by name
-    if layer_name == 'encoder':
+
+    if flatten:
         x = x.view(batch_size, -1)
-        return model.image_encoder(x)
-    elif layer_name == 'decoder':
-        encoded = model.image_encoder(x)
-        return model.decoder(encoded)
-    elif hasattr(model, layer_name):  # Generic case for named layers
+    if hasattr(model, layer_name):  # Generic case for named layers
         layer = getattr(model, layer_name)
+        output = layer(x)
+        #  This is for models that return more things than the output, Like Mask Indices or Attention Heads
+        if  isinstance(output, Sequence):
+            output = output[-1]
+        
         return layer(x)
     else:
         raise ValueError(f"Layer '{layer_name}' not found in the model.")
