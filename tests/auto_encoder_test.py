@@ -1,8 +1,5 @@
 import torch
 import pytest
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from mask_ml.model.auto_encoder import ImageAutoEncoder
 from mask_ml.model.mlp import MLP
 from mask_ml.model.vit import VitModel, generate_all_valid_configurations

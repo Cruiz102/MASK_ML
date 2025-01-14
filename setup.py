@@ -4,8 +4,6 @@ REQUIRED_PACKAGES = [
     "pycocotools",
     "opencv-python==4.10.0.84",
     "requests",
-    "torch==2.4.0",
-    "torchvision==0.19.0",
     "gputil",
     "psutil",
     "hydra-optuna-sweeper",
@@ -25,7 +23,7 @@ EXTRAS_REQUIRE = {
 
 
 setup(
-    name="ml_mask",
+    name="mask_ml",
     version="0.1",
     packages=find_packages(),
     install_requires=REQUIRED_PACKAGES,

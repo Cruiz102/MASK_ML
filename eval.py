@@ -79,9 +79,6 @@ def validation_test(
     latents_labels = []
 
 
-
-
-
     if log:
         os.makedirs(output_path, exist_ok=True)
         csv_file = os.path.join(output_path, "validation_results.csv")
@@ -97,9 +94,10 @@ def validation_test(
             start_time = time.time()
             inputs = inputs.to(device)
             labels = labels.to(device)
+            batch_size = inputs.shape[0]
 
             if latent_space_visualization and len(latents) < latent_sample_space_size:
-                layer_output = get_layer_output(model, inputs, latent_space_layer_name)
+                layer_output = get_layer_output(model, inputs, latent_space_layer_name, batch_size=batch_size)
                 latents.append(layer_output.view(layer_output.size(0), -1).cpu().numpy())
                 latents_labels.append(labels.cpu().numpy())
 
