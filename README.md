@@ -98,3 +98,25 @@ example outputs:
 
  - ![](/assets/error_heatmaps_batch_0.png)
  - ![](/assets/step_loss_plot.png)
+
+
+
+
+
+ ## Referencences:
+
+
+ Some code references and inspirations of the implementation side   and the conceptual levels:
+
+
+
+ transformer.py; The code implementation is using parts of the kaparthy nanogpt: https://github.com/karpathy/nanoGPT/blob/master/model.py
+
+
+flex_attn_scores.py: This is for using the currently (I hope it doesnt get old) api for PyTorch for calculating efficiently attention variants with nvidia custom kernels. https://github.com/pytorch-labs/attention-gym/tree/main/attn_gym/masks
+
+
+
+Unet: Use  a very neat implementation of the Unet architecture .https://github.com/milesial/Pytorch-UNet
+
+

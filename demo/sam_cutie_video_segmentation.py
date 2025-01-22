@@ -3,7 +3,7 @@ import os
 import cv2
 import numpy as np
 import torch
-from typing import List
+from typing import List, Union
 
 # 3rd-Party / Local imports
 from third_party.sam_cutie import SamCutiePipeline
@@ -32,8 +32,8 @@ def parse_args():
     parser.add_argument(
         "--video",
         type=str,
-        required=True,
-        help="Path to the video file."
+        default=None,  # Make it optional
+        help="Path to the video file. If not provided, the webcam will be used."
     )
     parser.add_argument(
         "--output-dir",
@@ -115,29 +115,41 @@ def save_yolo_bboxes(
 # Main App Logic
 # -----------------------------------
 @torch.inference_mode()
-@torch.cuda.amp.autocast()
+@torch.amp.autocast(device_type='cuda', enabled=True)  # Updated autocast
 def run_app(args):
-    global points, points_labels, pipeline
+    global points, points_labels, pipeline, cached_bboxes, cached_masks
 
     annotator = DrawAnnotator()
-    cap = cv2.VideoCapture(args.video)
+    
+    # Initialize VideoCapture based on whether a video path is provided
+    if args.video:
+        cap = cv2.VideoCapture(args.video)
+        source = f"video file {args.video}"
+    else:
+        cap = cv2.VideoCapture(0)  # 0 is typically the default webcam
+        source = "webcam"
+    
     if not cap.isOpened():
-        print(f"Error: cannot open video {args.video}")
+        print(f"Error: cannot open {source}")
         return
 
-    # Read all frames into a list so we can navigate back and forth
+    # Read all frames into a list if using video file
     frames = []
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frames.append(frame)
-    cap.release()
+    if args.video:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames.append(frame)
+        cap.release()
 
-    num_frames = len(frames)
-    if num_frames == 0:
-        print("No frames found in video.")
-        return
+        num_frames = len(frames)
+        if num_frames == 0:
+            print("No frames found in video.")
+            return
+    else:
+        # For webcam, we'll read frames on-the-fly
+        pass  # No need to preload frames
 
     # Create output directories if needed
     if not os.path.exists(args.output_dir):
@@ -157,49 +169,72 @@ def run_app(args):
     object_counter = 0
 
     while True:
-        # Ensure frame_idx is in valid range
-        frame_idx = max(0, min(frame_idx, num_frames - 1))
-        image = frames[frame_idx].copy()
+        if args.video:
+            # Ensure frame_idx is in valid range
+            frame_idx = max(0, min(frame_idx, num_frames - 1))
+            image = frames[frame_idx].copy()
+        else:
+            if not paused:
+                ret, image = cap.read()
+                if not ret:
+                    print("Failed to grab frame from webcam.")
+                    break
+            # When paused, keep displaying the last frame
+            # No need to manage frame_idx for webcam
 
         # Optionally save the extracted frame to disk
-        if args.save_frames:
+        if args.save_frames and args.video:
             frame_filename = os.path.join(frames_dir, f"{frame_idx:06d}.jpg")
-            # You could check if file already exists, but we'll just overwrite
             cv2.imwrite(frame_filename, image)
 
-        # Retrieve cached bboxes/masks if they exist
-        # otherwise, run pipeline (only if pipeline.objects exist, i.e., known objects)
-        if frame_idx in cached_bboxes and frame_idx in cached_masks:
-            detected_bbox = cached_bboxes[frame_idx]
-            mask = cached_masks[frame_idx]
+        # See if we have cached results
+        if args.video:
+            if frame_idx in cached_bboxes and frame_idx in cached_masks:
+                detected_bbox = cached_bboxes[frame_idx]
+                mask = cached_masks[frame_idx]
+            else:
+                detected_bbox = []
+                mask = None
+                # Only run auto-inference if we already have known objects
+                if pipeline.objects:
+                    mask = pipeline.predict_mask(image)
+                    detected_bbox = to_bbox(mask)
+                    update_objects(detected_bbox)
+
+                    # Cache
+                    cached_bboxes[frame_idx] = detected_bbox
+                    cached_masks[frame_idx] = mask
+
+            # If we got boxes, optionally save YOLO & draw them
+            if detected_bbox and args.save_yolo:
+                height, width, _ = image.shape
+                yolo_dir = os.path.join(args.output_dir, "yolo_bboxes")
+                save_yolo_bboxes(detected_bbox, yolo_dir, frame_idx, width, height)
+
+            if detected_bbox:
+                image = annotator.draw_bbox(
+                    image,
+                    detected_bbox,
+                    object_color=objects_colors,
+                    draw_mask=True
+                )
         else:
+            # Webcam: handle caching differently or skip caching
             detected_bbox = []
             mask = None
+            # Example: perform detection on each frame if pipeline has objects
             if pipeline.objects:
-                # Predict mask for current frame
                 mask = pipeline.predict_mask(image)
-                # Convert mask to bounding boxes
                 detected_bbox = to_bbox(mask)
-                # Update objects color dictionary
                 update_objects(detected_bbox)
-                # Cache them
-                cached_bboxes[frame_idx] = detected_bbox
-                cached_masks[frame_idx] = mask
 
-        # If desired, save bounding boxes in YOLO format
-        if args.save_yolo and len(detected_bbox) > 0:
-            height, width, _ = image.shape
-            yolo_dir = os.path.join(args.output_dir, "yolo_bboxes")
-            save_yolo_bboxes(detected_bbox, yolo_dir, frame_idx, width, height)
-
-        # If we got boxes, draw them
-        if detected_bbox:
-            image = annotator.draw_bbox(
-                image,
-                detected_bbox,
-                object_color=objects_colors,
-                draw_mask=True
-            )
+            if detected_bbox:
+                image = annotator.draw_bbox(
+                    image,
+                    detected_bbox,
+                    object_color=objects_colors,
+                    draw_mask=True
+                )
 
         # Draw the positive/negative “click” points
         image_with_circles = image.copy()
@@ -216,16 +251,18 @@ def run_app(args):
         # Key handling
         key = cv2.waitKey(30 if not paused else 0) & 0xFF
 
-        if key == 27:  # ESC
+        if key == 27:  # ESC to quit
             break
+
         elif key == ord('p'):
             # Toggle paused
             paused = not paused
+
         elif key == ord('a'):
-            # Save object via pipeline
+            # Save object via pipeline (persists object in the pipeline)
             pipeline.save_object(
                 f"object-{object_counter}",
-                frames[frame_idx],  # current raw frame
+                image,  # current frame (webcam or video)
                 points=np.array(points),
                 point_labels=points_labels
             )
@@ -233,31 +270,45 @@ def run_app(args):
             points_labels.clear()
             object_counter += 1
 
-        # Navigation: left/right arrows
-        elif key == 81:  # left arrow
-            frame_idx -= 1
-        elif key == 83:  # right arrow
-            frame_idx += 1
+        elif key == ord('r'):
+            # Re-run inference on the *current frame* using the current points
+            if paused and len(points) > 0:
+                ultra_sam_prediction = pipeline.sam_model.predict(
+                    image, points=points, labels=points_labels
+                )
+                re_mask = ultra_sam_prediction[0].masks.data.to(dtype=torch.int).cpu().numpy()[0]
+                re_bboxes = to_bbox(re_mask)
+                update_objects(re_bboxes)
 
-        # Optional: If you want keys like 'f' to step forward, 'b' to step backward:
-        elif key == ord('f'):  # forward 1 frame
-            frame_idx += 1
-        elif key == ord('b'):  # backward 1 frame
-            frame_idx -= 1
+                if args.video:
+                    cached_bboxes[frame_idx] = re_bboxes
+                    cached_masks[frame_idx] = re_mask
+                else:
+                    # For webcam, you might handle caching differently or skip
+                    pass
 
+        # Navigation keys for video files
+        if args.video:
+            if key == 81:  # left arrow
+                frame_idx -= 1
+            elif key == 83:  # right arrow
+                frame_idx += 1
+            elif key == ord('f'):  # forward 1 frame
+                frame_idx += 1
+            elif key == ord('b'):  # backward 1 frame
+                frame_idx -= 1
+            # Auto-advance for video files
+            if not paused:
+                frame_idx += 1
+            if frame_idx >= num_frames:
+                print("End of video.")
+                break
         else:
-            # Some other key, do nothing
-            pass
+            # For webcam, handle frame capture differently
+            if not paused:
+                pass  # Already capturing frames in the loop
 
-        # If not paused, just advance one frame
-        if not paused:
-            frame_idx += 1
-
-        if frame_idx >= num_frames:
-            # We reached the end
-            print("End of video.")
-            break
-
+    cap.release()
     cv2.destroyAllWindows()
 
 
