@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  mask_ml_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mask_ml_app_container
+    working_dir: /MASK_ML
+    privileged: true         # Full access to host devices, including cameras
+    stdin_open: true         # Interactive shell support
+    tty: true
+    # Removed the command: bash line which was conflicting with our entrypoint
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - SCRIPT_TO_RUN=demo/sam_cutie_video_segmentation.py  # Specify which script to run
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix  # GUI display
+      # - ./:/MASK_ML  # Mount local directory to container for development
