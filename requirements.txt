@@ -1,12 +1,13 @@
 hydra-core==1.3.2
-pycocotools
-opencv-python==4.10.0.84
+# pycocotools
+opencv-python
 requests
-torch==2.4.0
-torchvision==0.19.0
+torch
+torchvision
 gputil
 psutil
 hydra-optuna-sweeper
 matplotlib
 pytest
+kagglehub
 scikit-learn

@@ -1,7 +1,6 @@
 from setuptools import setup, find_packages
 REQUIRED_PACKAGES = [
     "hydra-core==1.3.2",
-    "pycocotools",
     "opencv-python==4.10.0.84",
     "requests",
     "gputil",

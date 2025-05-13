@@ -22,4 +22,5 @@ services:
       - SCRIPT_TO_RUN=demo/sam_cutie_video_segmentation.py  # Specify which script to run
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix  # GUI display
+      # - ./:/MASK_ML/volume  # Mount entire project directory to /MASK_ML/volume
       # - ./:/MASK_ML  # Mount local directory to container for development

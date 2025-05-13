@@ -44,12 +44,8 @@ def parse_args():
     parser.add_argument(
         "--save-yolo",
         action="store_true",
-        help="If set, save bounding boxes in YOLO format for each frame."
-    )
-    parser.add_argument(
-        "--save-frames",
-        action="store_true",
-        help="If set, store extracted frames in the output folder."
+        default=True,
+        help="If set, save extracted frames and bounding boxes in YOLO format to the output folder."
     )
     return parser.parse_args()
 
@@ -92,9 +88,11 @@ def save_yolo_bboxes(
       class_id x_center y_center width height
     All values normalized (0..1).
     """
+    print(f"Saving YOLO bounding boxes to {output_dir} for frame {frame_idx}")
     os.makedirs(output_dir, exist_ok=True)
     yolo_class_id = 0  
     yolo_filename = os.path.join(output_dir, f"{frame_idx:06d}.txt")
+    print(f"Saving YOLO file: {yolo_filename}")
     with open(yolo_filename, "w") as f:
         for box in bboxes:
             x_center = (box.x1 + box.x2) / 2.0
@@ -115,10 +113,61 @@ def save_yolo_bboxes(
 # Main App Logic
 # -----------------------------------
 @torch.inference_mode()
-@torch.amp.autocast(device_type='cuda', enabled=True)  # Updated autocast
 def run_app(args):
     global points, points_labels, pipeline, cached_bboxes, cached_masks
 
+    # Add a simple extraction mode that just saves the frames without running models
+    if args.video and args.save_yolo:
+        print(f"Running in simple extraction mode to save frames")
+        # Create output directories
+        frames_dir = os.path.join(args.output_dir, "frames")
+        yolo_dir = os.path.join(args.output_dir, "yolo_bboxes")
+        os.makedirs(frames_dir, exist_ok=True)
+        os.makedirs(yolo_dir, exist_ok=True)
+        
+        # Open video file
+        cap = cv2.VideoCapture(args.video)
+        if not cap.isOpened():
+            print(f"Error: cannot open video file {args.video}")
+            return
+            
+        # Get video info
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        print(f"Extracting {frame_count} frames from video to {frames_dir}")
+        
+        # Process the video frame by frame
+        frame_idx = 0
+        while True:
+            # Read frame
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            # Save frame
+            frame_filename = os.path.join(frames_dir, f"{frame_idx:06d}.jpg")
+            cv2.imwrite(frame_filename, frame)
+            
+            # Print progress periodically
+            if frame_idx % 100 == 0:
+                print(f"Processed {frame_idx}/{frame_count} frames")
+                
+            frame_idx += 1
+            
+        print(f"Successfully extracted {frame_idx} frames to {frames_dir}")
+        
+        # Create a classes.txt file for YOLOv8 training
+        with open(os.path.join(args.output_dir, "classes.txt"), "w") as f:
+            f.write("object\n")
+            
+        print("Created classes.txt file with default 'object' class")
+        print(f"\nYou can now train a YOLOv8 model with:")
+        print(f"./run_docker_demo.sh -s train_yolo -- --data-dir {args.output_dir} --model yolov8n.pt")
+        
+        cap.release()
+        return
+        
+    # Continue with the original interactive mode
     annotator = DrawAnnotator()
     
     # Initialize VideoCapture based on whether a video path is provided
@@ -133,39 +182,102 @@ def run_app(args):
         print(f"Error: cannot open {source}")
         return
 
-    # Read all frames into a list if using video file
+    # Create output directories if needed
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+    
+    # Create frames directory for saving frames if save-yolo is enabled
+    frames_dir = os.path.join(args.output_dir, "frames")
+    if args.save_yolo and not os.path.exists(frames_dir):
+        os.makedirs(frames_dir)
+
+    # Create yolo_bboxes directory for saving annotations if save-yolo is enabled
+    yolo_dir = os.path.join(args.output_dir, "yolo_bboxes")
+    if args.save_yolo and not os.path.exists(yolo_dir):
+        os.makedirs(yolo_dir)
+
+    if args.video and args.save_yolo:
+        print(f"Processing video and saving frames to {frames_dir}")
+        # Get video info
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Process video in batches to avoid memory issues
+        batch_size = 100  # Process 100 frames at a time
+        frame_idx = 0
+        
+        while frame_idx < frame_count:
+            print(f"Processing frames {frame_idx} to {min(frame_idx + batch_size, frame_count)}")
+            
+            # Process a batch of frames
+            for i in range(batch_size):
+                if frame_idx >= frame_count:
+                    break
+                    
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                # Save the frame
+                frame_filename = os.path.join(frames_dir, f"{frame_idx:06d}.jpg")
+                cv2.imwrite(frame_filename, frame)
+                
+                # If we have objects defined, we can also save bounding boxes
+                if pipeline.objects:
+                    mask = pipeline.predict_mask(frame)
+                    detected_bbox = to_bbox(mask)
+                    if detected_bbox:
+                        height, width, _ = frame.shape
+                        save_yolo_bboxes(detected_bbox, yolo_dir, frame_idx, width, height)
+                
+                frame_idx += 1
+                
+                # Print progress every 10 frames
+                if frame_idx % 10 == 0:
+                    print(f"Saved {frame_idx}/{frame_count} frames")
+            
+            # Clear CUDA cache periodically to avoid OOM
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                
+        print(f"Finished processing video. Saved {frame_idx} frames.")
+        cap.release()
+        
+        # Create a classes.txt file for the dataset
+        with open(os.path.join(args.output_dir, "classes.txt"), "w") as f:
+            f.write("object\n")
+            
+        print(f"Created dataset with {frame_idx} frames in {frames_dir}")
+        print(f"You can now train a YOLOv8 model with:")
+        print(f"./run_docker_demo.sh -s train_yolo -- --data-dir {args.output_dir} --model yolov8n.pt")
+        return
+    
+    # Setup display window for interactive mode
+    cv2.namedWindow('demo', cv2.WINDOW_AUTOSIZE)
+    cv2.setMouseCallback("demo", update_global_variables)
+
+    # Read all frames into a list if using video file and not just saving
     frames = []
     if args.video:
-        while True:
+        # Limit to 1000 frames for interactive mode to avoid memory issues
+        max_frames = 1000
+        frame_count = 0
+        while frame_count < max_frames:
             ret, frame = cap.read()
             if not ret:
                 break
             frames.append(frame)
+            frame_count += 1
         cap.release()
 
         num_frames = len(frames)
         if num_frames == 0:
             print("No frames found in video.")
             return
-    else:
-        # For webcam, we'll read frames on-the-fly
-        pass  # No need to preload frames
-
-    # Create output directories if needed
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-    frames_dir = os.path.join(args.output_dir, "frames")
-    if args.save_frames and not os.path.exists(frames_dir):
-        os.makedirs(frames_dir)
-
-    # Setup display window
-    cv2.namedWindow('demo', cv2.WINDOW_AUTOSIZE)
-    cv2.setMouseCallback("demo", update_global_variables)
-
+        print(f"Loaded {num_frames} frames for interactive annotation.")
+    
     # State for playback
     frame_idx = 0
     paused = False
-
     object_counter = 0
 
     while True:
@@ -182,10 +294,25 @@ def run_app(args):
             # When paused, keep displaying the last frame
             # No need to manage frame_idx for webcam
 
-        # Optionally save the extracted frame to disk
-        if args.save_frames and args.video:
-            frame_filename = os.path.join(frames_dir, f"{frame_idx:06d}.jpg")
-            cv2.imwrite(frame_filename, image)
+            # For webcam, save frames if enabled (only when not paused)
+            if args.save_yolo and not paused:
+                # For webcam, use timestamp as frame index
+                import time
+                timestamp = int(time.time() * 1000)
+                frames_dir = os.path.join(args.output_dir, "frames")
+                frame_filename = os.path.join(frames_dir, f"{timestamp:06d}.jpg")
+                print(f"Saving webcam frame to {frame_filename}")
+                cv2.imwrite(frame_filename, image)
+                frame_idx = timestamp  # Use timestamp as frame_idx for webcam
+                
+                # If we have objects defined, also save YOLO bounding boxes for the webcam frame
+                if pipeline.objects:
+                    mask = pipeline.predict_mask(image)
+                    detected_bbox = to_bbox(mask)
+                    if detected_bbox:
+                        height, width, _ = image.shape
+                        save_yolo_bboxes(detected_bbox, yolo_dir, timestamp, width, height)
+                        print(f"Saved YOLO annotations for webcam frame {timestamp}")
 
         # See if we have cached results
         if args.video:
@@ -208,7 +335,6 @@ def run_app(args):
             # If we got boxes, optionally save YOLO & draw them
             if detected_bbox and args.save_yolo:
                 height, width, _ = image.shape
-                yolo_dir = os.path.join(args.output_dir, "yolo_bboxes")
                 save_yolo_bboxes(detected_bbox, yolo_dir, frame_idx, width, height)
 
             if detected_bbox:
