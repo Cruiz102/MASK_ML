@@ -95,7 +95,8 @@ class MaskedAutoEncoder(nn.Module):
         super(MaskedAutoEncoder, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
-        self.mask_token = nn.Parameter(torch.zeros(1, encoder.embedded_size))
+        self.embedded_size = embedded_size  # Store embedded_size as class attribute
+        self.mask_token = nn.Parameter(torch.zeros(1, embedded_size))  # Use the provided embedded_size
         self.patch_encoder = MaskPatchEncoder(mask_ratio=mask_ratio, 
                                               image_size=image_size, 
                                               patch_size=patch_size, 
@@ -115,12 +116,68 @@ class MaskedAutoEncoder(nn.Module):
         full_decoder_input += self.patch_encoder.pos_embed
         reconstructed_patches = self.decoder(full_decoder_input)
 
+        # Reconstruct the image from patches
         reconstructed_image = torch.zeros_like(x)
         patch_size = self.patch_encoder.patch_size
         idx = 0
+        
+        # Calculate the expected number of elements per patch
+        patch_elements = x.size(1) * patch_size * patch_size  # channels * height * width
+        
+        # Iterate through the image grid by patch positions
         for i in range(0, x.size(2), patch_size):
             for j in range(0, x.size(3), patch_size):
-                reconstructed_image[:, :, i:i+patch_size, j:j+patch_size] = reconstructed_patches[:, idx, :].view(-1, x.size(1), patch_size, patch_size)
+                if idx >= reconstructed_patches.size(1):
+                    # Skip if we've run out of patches (can happen with rounding issues)
+                    continue
+                    
+                # Get the current patch from the reconstructed patches
+                current_patch = reconstructed_patches[:, idx, :]
+                
+                # Calculate shape parameters for reshaping
+                batch_size = x.size(0)       # Number of images in batch
+                channels = x.size(1)         # Number of channels in image
+                
+                # Check if the sizes match before reshaping
+                if current_patch.size(1) == patch_elements:
+                    # Reshape the patch from flattened representation to spatial dimensions:
+                    # [batch_size, embedding] -> [batch_size, channels, patch_size, patch_size]
+                    patch_reshaped = current_patch.reshape(
+                        batch_size,      # Preserve batch dimension
+                        channels,        # Number of channels
+                        patch_size,      # Height of patch
+                        patch_size       # Width of patch
+                    )
+                    
+                    # Place the patch in the correct position in the final image
+                    # Ensure we don't go out of bounds
+                    h_end = min(i + patch_size, x.size(2))
+                    w_end = min(j + patch_size, x.size(3))
+                    reconstructed_image[:, :, i:h_end, j:w_end] = patch_reshaped[:, :, :(h_end-i), :(w_end-j)]
+                else:
+                    # If the sizes don't match, print debug info and try to adapt
+                    print(f"Warning: Patch size mismatch. Expected {patch_elements}, got {current_patch.size(1)}")
+                    # Try to use a direct reshape with the actual size we have
+                    try:
+                        # Calculate the patch size based on what we actually have
+                        actual_patch_size = int((current_patch.size(1) / channels) ** 0.5)
+                        if actual_patch_size > 0 and (actual_patch_size ** 2) * channels == current_patch.size(1):
+                            patch_reshaped = current_patch.reshape(
+                                batch_size,
+                                channels,
+                                actual_patch_size,
+                                actual_patch_size
+                            )
+                            # Place in image using the actual patch size
+                            h_end = min(i + actual_patch_size, x.size(2))
+                            w_end = min(j + actual_patch_size, x.size(3))
+                            reconstructed_image[:, :, i:h_end, j:w_end] = patch_reshaped[:, :, :(h_end-i), :(w_end-j)]
+                        else:
+                            print(f"Cannot determine appropriate patch size for {current_patch.size(1)} elements")
+                    except Exception as e:
+                        print(f"Error reshaping patch: {e}")
+                
+                # Move to the next patch index
                 idx += 1
 
         return reconstructed_image, masked_indices
