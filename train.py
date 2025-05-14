@@ -81,7 +81,7 @@ def run_training(cfg: DictConfig):
                 # LOSS CALCULATION DEPENDING ON THE MODEL
                 if isinstance(model, ImageAutoEncoder):
                     loss = criterion(y, inputs)
-                if isinstance(model, MaskedAutoEncoder):
+                elif isinstance(model, MaskedAutoEncoder):
                     loss = criterion(y,inputs,labels)
                 else:
                     loss = criterion(y, labels)

@@ -44,6 +44,7 @@ def validation_test(
 
     total_score = 0.0
     num_batches = len(dataloader)
+    flat_output_get_layer_output = False
 
     if isinstance(model, VitClassificationHead):
         task = Tasks.CLASSIFICATION
@@ -53,6 +54,9 @@ def validation_test(
         task = Tasks.SEGMENTATION
     elif isinstance(model, ImageAutoEncoder): 
         task = Tasks.AUTOENCODER
+        flat_output_get_layer_output = model.flatten
+
+        
     elif isinstance(model, MaskedAutoEncoder):
         task = Tasks.MASKAUTOENCODER
     else:
@@ -97,7 +101,7 @@ def validation_test(
             batch_size = inputs.shape[0]
 
             if latent_space_visualization and len(latents) < latent_sample_space_size:
-                layer_output = get_layer_output(model, inputs, latent_space_layer_name, batch_size=batch_size)
+                layer_output = get_layer_output(model, inputs, latent_space_layer_name, batch_size=batch_size, flatten= flat_output_get_layer_output)
                 latents.append(layer_output.view(layer_output.size(0), -1).cpu().numpy())
                 latents_labels.append(labels.cpu().numpy())
 

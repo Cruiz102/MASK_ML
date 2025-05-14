@@ -3,14 +3,14 @@ import torch.nn as nn
 
 class ImageAutoEncoder(nn.Module):
     def __init__(self,
-                 image_encoder: nn.Module,
+                 encoder: nn.Module,
                  decoder: nn.Module,
                  image_size: int = 32,
                  flatten: bool = False
 
                  ):
         super(ImageAutoEncoder, self).__init__()
-        self.image_encoder = image_encoder
+        self.encoder = encoder
         self.decoder = decoder
         self.image_size = image_size
         self.flatten = flatten 
@@ -22,7 +22,7 @@ class ImageAutoEncoder(nn.Module):
             x = x.view(batch_size, -1)
         
         # Encode and decode
-        latent = self.image_encoder(x)
+        latent = self.encoder(x)
         reconstructed = self.decoder(latent)
         
         # Reshape back to original dimensions if flattened

@@ -42,6 +42,11 @@ class MLP(nn.Module):
                 input_size: int = 32 ,
                 output_size: int = 10,
                 hidden_sizes: Optional[List[int]] = None):
+        self.input_size = input_size
+        self.output_size = output_size
+        self.hidden_sizes = hidden_sizes
+        self.activation_function = activation_function
+
         super(MLP, self).__init__()
         if hidden_sizes:
             layer_sizes = [input_size] + hidden_sizes + [output_size]
