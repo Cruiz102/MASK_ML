@@ -1,0 +1,42 @@
+defaults:
+  - _self_
+
+# Docker execution settings
+use_docker: false
+container_name: mask_ml_app
+
+# Data paths
+video_dir: /mnt/data/videos
+output_dir: ./runs
+
+# Pipeline task settings
+data_engine_task: "video_segmentation"  # Options: video_segmentation, model_training, full_pipeline
+
+# Video segmentation settings
+segmentation:
+  save_yolo: true
+  save_frames: true
+  confidence_threshold: 0.35
+  nms_threshold: 0.3
+  mask_threshold: 0.5
+  frames_per_second: 5  # 0 for all frames
+  visualize: true
+
+# Model training settings
+training:
+  model_type: "yolov8"
+  model_size: "n"  # Options: n, s, m, l, x
+  epochs: 50
+  batch_size: 16
+  image_size: 640
+  patience: 10  # Early stopping patience
+  learning_rate: 0.001
+
+# Advanced settings
+advanced:
+  gpu_enabled: true
+  num_workers: 4
+  seed: 42
+  debug_mode: false
+
+
