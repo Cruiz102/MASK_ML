@@ -5,7 +5,7 @@ import torch.nn as nn
 from mask_ml.model.transformer import TransformerConfig, TransformerBlock
 from torch.nn import functional as F
 from mask_ml.utils.utils import sinusoidal_positional_encoding
-
+from mask_ml.model.common_layers import LayerNorm2d
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 @dataclass
@@ -53,24 +53,8 @@ class MLP(nn.Module):
 
 
 
-
-# From https://github.com/facebookresearch/detectron2/blob/main/detectron2/layers/batch_norm.py # noqa
-# Itself from https://github.com/facebookresearch/ConvNeXt/blob/d1fa8f6fef0a165b27399986cc2bdacc92777e40/models/convnext.py#L119  # noqa
-class LayerNorm2d(nn.Module):   
-    def __init__(self, num_channels: int, eps: float = 1e-6) -> None:
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(num_channels))
-        self.bias = nn.Parameter(torch.zeros(num_channels))
-        self.eps = eps
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        u = x.mean(1, keepdim=True)
-        s = (x - u).pow(2).mean(1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.eps)
-        x = self.weight[:, None, None] * x + self.bias[:, None, None]
-        return x
         
-class MaskDecoder(nn.Module):
+class SamMaskDecoder(nn.Module):
     def __init__(self, config: MaskDecoderConfig):
         self.config = config
         self.num_multimask_outputs: int = 3
