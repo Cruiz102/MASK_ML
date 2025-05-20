@@ -1,0 +1,43 @@
+_target_: "mask_ml.model.sam_model.Sam"
+
+# Image encoder configuration
+# Note: This relies on an external image encoder that needs to be separately defined
+image_encoder:
+  _target_: "torch.nn.Identity"  # Placeholder, should be replaced with actual encoder
+
+# Prompt encoder configuration
+prompt_encoder:
+  _target_: "mask_ml.model.sam_model.PromptEncoder"
+  embed_dim: 256
+  image_embedding_size: [64, 64]  # H/4, W/4 of a 256x256 image
+  input_image_size: [1024, 1024]  # Original size before encoding
+  mask_in_chans: 16
+  activation:
+    _target_: "torch.nn.GELU"
+
+# Mask decoder configuration
+mask_decoder:
+  _target_: "mask_ml.model.sam_model.MaskDecoder"
+  transformer_dim: 256
+  transformer:
+    _target_: "mask_ml.model.sam_model.TwoWayTransformer"
+    depth: 2
+    embedding_dim: 256
+    num_heads: 8
+    mlp_dim: 2048
+    activation:
+      _target_: "torch.nn.ReLU"
+    attention_downsample_rate: 2
+  num_multimask_outputs: 3
+  activation:
+    _target_: "torch.nn.GELU"
+  iou_head_depth: 3
+  iou_head_hidden_dim: 256
+
+# Image normalization parameters (ImageNet stats)
+pixel_mean: [123.675, 116.28, 103.53]
+pixel_std: [58.395, 57.12, 57.375]
+
+# Additional model properties
+mask_threshold: 0.0
+image_format: "RGB"

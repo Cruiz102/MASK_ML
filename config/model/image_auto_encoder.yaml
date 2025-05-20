@@ -1,6 +1,6 @@
 _target_: "mask_ml.model.auto_encoder.ImageAutoEncoder"
 
-image_encoder:
+encoder:
   _target_: "mask_ml.model.mlp.MLP"
   activation_function: "relu"
   input_size: 784  # For 32x32 RGB images (3 * 32 * 32)

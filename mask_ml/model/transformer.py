@@ -21,20 +21,6 @@ transformer_logger.addHandler(handler)
 
 
 
-@dataclass
-class TransformerConfig:
-    embedded_size : int=  200
-    attention_heads: int = 5
-    mlp_hidden_size: int = 2
-    mlp_layers: int = 2
-    activation_function: str = "relu"
-    dropout_prob : float = 0.2
-    flash_attention: bool = False
-    rotary_relative_embeddings: bool = False
-
-
-
-
 
 # Copied from transformers.models.llama.modeling_llama.LlamaRotaryEmbedding with Llama->Phi
 class RotaryEmbedding(nn.Module):
